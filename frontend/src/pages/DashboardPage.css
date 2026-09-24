@@ -1,0 +1,99 @@
+.dashboard {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.map-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Status banners */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 12px;
+  z-index: 500;
+  position: relative;
+}
+
+.banner-success {
+  background: rgba(52, 199, 89, 0.1);
+  border-bottom: 1px solid rgba(52, 199, 89, 0.25);
+  color: var(--risk-low);
+}
+
+.banner-partial {
+  background: rgba(255, 149, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 149, 0, 0.25);
+  color: var(--risk-medium);
+}
+
+.banner-failed {
+  background: rgba(255, 59, 48, 0.1);
+  border-bottom: 1px solid rgba(255, 59, 48, 0.25);
+  color: var(--risk-high);
+}
+
+.banner-error {
+  background: rgba(255, 59, 48, 0.1);
+  border-bottom: 1px solid rgba(255, 59, 48, 0.25);
+  color: var(--risk-high);
+}
+
+.banner-icon {
+  font-size: 14px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+/* Map legend */
+.map-legend {
+  position: absolute;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: 10px;
+  color: var(--text-secondary);
+  z-index: 500;
+}
+
+.legend-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 4px;
+}
+
+.legend-row:last-child {
+  margin-bottom: 0;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-high { background: var(--risk-high); box-shadow: 0 0 6px var(--risk-high); }
+.legend-medium { background: var(--risk-medium); box-shadow: 0 0 6px var(--risk-medium); }
+.legend-low { background: var(--risk-low); box-shadow: 0 0 6px var(--risk-low); }
