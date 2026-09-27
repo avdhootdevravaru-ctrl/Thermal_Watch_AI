@@ -10,9 +10,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.config import settings
-from app.routers import health_router, ingestion_router, events_router, map_router
+from app.routers import (
+    health_router,
+    ingestion_router,
+    events_router,
+    map_router,
+    history_router,
+)
 from app.utils.logging import setup_logging
 
 # --- Logging setup ---
@@ -51,6 +59,15 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+
+@app.exception_handler(OperationalError)
+async def database_unavailable(_request, exc: OperationalError):
+    logger.error("Database request failed: %s", exc.orig)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database unavailable. Start PostgreSQL/PostGIS or enable explicit demo mode."},
+    )
+
 # --- CORS (adjust for production) ---
 app.add_middleware(
     CORSMiddleware,
@@ -62,10 +79,14 @@ app.add_middleware(
 
 # --- Routers ---
 app.include_router(health_router)
-app.include_router(ingestion_router)  # router already has prefix="/ingestion"
-app.include_router(events_router)  # router already has prefix="/thermal-events"
-app.include_router(map_router)  # router already has prefix="/map"
-app.include_router(history_router)  # router already has prefix="/history"
+if settings.DEMO_MODE or settings.FIRMS_SNAPSHOT_PATH:
+    from app.demo import router as demo_router
+    app.include_router(demo_router)
+else:
+    app.include_router(ingestion_router)
+    app.include_router(events_router)
+    app.include_router(map_router)
+    app.include_router(history_router)
 
 
 # --- Root endpoint ---
@@ -77,6 +98,8 @@ async def root() -> dict:
         "description": "Geospatial intelligence for industrial fire detection",
         "docs": "/docs",
         "health": "/health",
+        "data_mode": "DEMO DATA" if settings.DEMO_MODE else
+        "FIRMS SNAPSHOT" if settings.FIRMS_SNAPSHOT_PATH else "LIVE MODE",
     }
 
 

@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 
 class IngestionRunRequest(BaseModel):
     """Optional request body for POST /ingestion/firms/run."""
-    area: Optional[str] = Field(None, description="Override FIRMS area code (e.g. IND, world)")
-    days: Optional[int] = Field(None, ge=1, le=10, description="Override look-back days (1–10)")
+    area: Optional[str] = Field(None, description="Override FIRMS area: world or west,south,east,north (legacy IND maps to India bounding box)")
+    days: Optional[int] = Field(None, ge=1, le=5, description="Override look-back days (1–5)")
     satellite: Optional[str] = Field(None, description="Override satellite (e.g. VIIRS_NOAA20_NRT)")
 
 
@@ -30,6 +30,9 @@ class IngestionResult(BaseModel):
     started_at: datetime
     completed_at: datetime
     errors: list[str] = Field(default_factory=list, description="Non-fatal error messages")
+    storage_backend: Optional[str] = None
+    records_accepted: Optional[int] = None
+    records_rejected: Optional[int] = None
 
 
 class IngestionStatus(BaseModel):

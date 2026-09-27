@@ -42,18 +42,6 @@ async def get_map_hotspots(
         ThermalEvent.longitude <= 97.5,
     )
 
-    # Filter by status if requested
-    if risk_severity:
-        # Map severity to status
-        status_map = {
-            "high": ["PERSISTENT"],
-            "medium": ["ACTIVE"],
-            "low": ["RESOLVED"],
-        }
-        statuses = status_map.get(risk_severity.lower(), [])
-        if statuses:
-            events_query = events_query.filter(ThermalEvent.status.in_(statuses))
-
     events = events_query.limit(limit).all()
 
     # Build markers using stored risk assessments where available
@@ -75,6 +63,9 @@ async def get_map_hotspots(
                 normalized_severity = "medium"
             else:
                 normalized_severity = "low"
+
+            if risk_severity and normalized_severity != risk_severity.lower():
+                continue
 
             # Get persistence score from risk if available, otherwise compute
             persistence_score = event.persistence_score
@@ -104,6 +95,9 @@ async def get_map_hotspots(
                 severity = "medium"
             else:
                 severity = "low"
+
+            if risk_severity and severity != risk_severity.lower():
+                continue
 
             risk_summary[severity] += 1
 

@@ -142,3 +142,18 @@
   display: flex;
   overflow: hidden;
 }
+@media (max-width: 760px) {
+  .topbar { padding: 0 12px; gap: 10px; }
+  .brand-tag, .status-meta { display: none; }
+  .brand-name { font-size: 13px; white-space: nowrap; }
+  .brand-mark { width: 28px; height: 28px; }
+  .topnav-link { padding: 6px 8px; font-size: 11px; }
+  .system-status { padding: 6px 8px; font-size: 10px; }
+}
+@media (max-width: 480px) {
+  .topbar { height: 52px; }
+  .topnav-link span { display: none; }
+  .topnav-link svg { width: 17px; height: 17px; }
+  .brand-mark { display: none; }
+  .status-label { font-size: 9px; }
+}

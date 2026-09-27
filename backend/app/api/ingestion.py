@@ -16,6 +16,7 @@ from app.config import settings
 from app.db.base import get_db
 from app.db.models import ThermalEvent, ThermalObservation
 from app.ingestion.firms_client import FirmsClient
+from app.ingestion.validation import validate_firms_csv
 from app.ingestion.normalizer import normalize_observation
 from app.processing.clustering import cluster_observations, assign_observations_to_events
 from app.processing.persistence import detect_persistent_sources, compute_persistence_score
@@ -61,7 +62,7 @@ async def run_firms_ingestion(
     duplicates = 0
 
     # --- Step 1: Fetch FIRMS data ---
-    if not settings.FIRMS_MAP_KEY:
+    if not settings.FIRMS_MAP_KEY or settings.FIRMS_MAP_KEY.startswith("YOUR_"):
         logger.error("FIRMS_MAP_KEY is not configured")
         errors.append("FIRMS_MAP_KEY is not configured. Please set your NASA FIRMS API key in the .env file.")
         return IngestionResult(
@@ -87,10 +88,12 @@ async def run_firms_ingestion(
             area=area,
             days=days,
         )
-        raw_observations = client.fetch_observations()
+        raw_csv = client.fetch_csv()
+        normalized, report = validate_firms_csv(raw_csv, source=satellite)
     except Exception as e:
-        logger.exception("FIRMS fetch failed: %s", e)
-        errors.append(f"FIRMS fetch failed: {e}")
+        # httpx exceptions may contain the request URL, including MAP_KEY.
+        logger.error("FIRMS fetch failed (%s)", type(e).__name__)
+        errors.append("FIRMS fetch failed. Check API key, product, network, and FIRMS service status.")
         return IngestionResult(
             status="failed",
             observations_fetched=0,
@@ -107,7 +110,7 @@ async def run_firms_ingestion(
             errors=errors,
         )
 
-    if not raw_observations:
+    if report.records_received == 0:
         logger.warning("FIRMS returned no observations")
         errors.append("FIRMS returned no observations")
         return IngestionResult(
@@ -126,44 +129,10 @@ async def run_firms_ingestion(
             errors=errors,
         )
 
-    # --- Step 2: Normalize observations ---
-    normalized = []
-    failed_normalization = 0
-    seen: set[tuple[float, float, datetime]] = set()
-    for raw in raw_observations:
-        try:
-            obs = normalize_observation(raw)
-            # Critical-field validation: lat, lon, and timestamp are required.
-            # Distinguish invalid coordinates (present but out of range) from missing fields.
-            if obs.get("latitude") is None or obs.get("longitude") is None or obs.get("timestamp") is None:
-                if obs.get("_invalid_coordinates"):
-                    invalid_coordinates += 1
-                    logger.warning(
-                        "Rejected FIRMS observation with invalid coordinates: %s",
-                        {k: obs.get(k) for k in ("latitude", "longitude")},
-                    )
-                else:
-                    missing_critical_fields += 1
-                    logger.warning(
-                        "Rejected FIRMS observation with missing critical fields: %s",
-                        {k: obs.get(k) for k in ("latitude", "longitude", "timestamp")},
-                    )
-                continue
-
-            # Observation-level duplicate detection: same location + timestamp
-            ts = obs["timestamp"]
-            if isinstance(ts, datetime):
-                ts = ts.replace(microsecond=0)
-            key = (obs["latitude"], obs["longitude"], ts)
-            if key in seen:
-                duplicates += 1
-                logger.warning("Dropped duplicate FIRMS observation at %s", obs["timestamp"])
-                continue
-            seen.add(key)
-            normalized.append(obs)
-        except Exception as e:
-            logger.warning("Failed to normalize observation: %s", e)
-            failed_normalization += 1
+    # --- Step 2: Use the same audited validator as local FIRMS replay ---
+    invalid_coordinates = report.invalid_coordinates
+    missing_critical_fields = report.rejection_reasons.get("MISSING_COORDINATES", 0) + report.invalid_timestamps
+    duplicates = report.duplicates_removed
 
     # Filter to India only (user requirement: India geographic containment)
     india_observations = filter_india_observations(normalized)
@@ -180,7 +149,7 @@ async def run_firms_ingestion(
     except Exception as e:
         logger.exception("Store observations failed: %s", e)
         db.rollback()
-        errors.append(f"Store failed: {e}")
+        errors.append("Database storage failed; check PostgreSQL/PostGIS connection and schema.")
         store_result = {"inserted": 0, "updated": 0, "failed": 0}
 
     # --- Step 4: Cluster observations into events ---
@@ -320,7 +289,7 @@ async def run_firms_ingestion(
     except Exception as e:
         logger.exception("Clustering failed: %s", e)
         db.rollback()
-        errors.append(f"Clustering failed: {e}")
+        errors.append("Database clustering failed; check PostgreSQL/PostGIS connection and schema.")
         events_created = 0
         events_updated = 0
         persistent = []
@@ -330,9 +299,9 @@ async def run_firms_ingestion(
 
     return IngestionResult(
         status="success" if not errors else "partial",
-        observations_fetched=len(raw_observations),
+        observations_fetched=report.records_received,
         observations_stored=store_result.get("inserted", 0),
-        observations_failed=store_result.get("failed", 0) + failed_normalization,
+        observations_failed=store_result.get("failed", 0) + report.records_rejected,
         events_created=events_created,
         events_updated=events_updated,
         persistent_sources=len(persistent),
@@ -342,4 +311,6 @@ async def run_firms_ingestion(
         started_at=started_at,
         completed_at=completed_at,
         errors=errors,
+        storage_backend="POSTGIS", records_accepted=report.records_accepted,
+        records_rejected=report.records_rejected,
     )

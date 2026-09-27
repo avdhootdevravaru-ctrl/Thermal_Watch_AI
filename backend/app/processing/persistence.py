@@ -131,7 +131,7 @@ def compute_persistence_score(
         "persistence_score": round(persistence_score, 2),
         "average_intensity": round(average_intensity, 2) if average_intensity is not None else None,
         "intensity_variance": round(intensity_variance, 2) if intensity_variance is not None else None,
-        "spatial_stability": round(spatial_stability, 4) if spatial_stability is not None else None,
+        "spatial_stability": round(spatial_stability, 8) if spatial_stability is not None else None,
         "first_detection": first_detection,
         "last_detection": last_detection,
         "trend": trend,
@@ -167,11 +167,12 @@ def _determine_trend(observations: List[Any]) -> str:
     first_half = sorted_obs[:half]
     second_half = sorted_obs[half:]
 
-    first_avg = np.mean([get_attr(o, "intensity") for o in first_half if get_attr(o, "intensity") is not None])
-    second_avg = np.mean([get_attr(o, "intensity") for o in second_half if get_attr(o, "intensity") is not None])
-
-    if first_avg is None or second_avg is None:
+    first_values = [get_attr(o, "intensity") for o in first_half if get_attr(o, "intensity") is not None]
+    second_values = [get_attr(o, "intensity") for o in second_half if get_attr(o, "intensity") is not None]
+    if not first_values or not second_values:
         return "UNKNOWN"
+    first_avg = np.mean(first_values)
+    second_avg = np.mean(second_values)
 
     diff = second_avg - first_avg
 

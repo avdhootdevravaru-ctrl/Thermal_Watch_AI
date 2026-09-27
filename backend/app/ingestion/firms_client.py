@@ -12,6 +12,8 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import math
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -40,9 +42,27 @@ class FirmsClient:
         days: int = 1,
         timeout: int = 60,
     ):
+        if not 1 <= days <= 5:
+            raise ValueError("FIRMS Area API day range must be 1–5")
+        if not re.fullmatch(r"[A-Za-z0-9_]+", satellite):
+            raise ValueError("Invalid FIRMS source identifier")
+        normalized_area = area.strip()
+        # Preserve existing IND configuration while using the Area API's
+        # documented bounding-box form, then filter by India in processing.
+        if normalized_area.upper() == "IND":
+            normalized_area = "68,6.5,97.5,35.5"
+        elif normalized_area.lower() == "world":
+            normalized_area = "world"
+        else:
+            try:
+                west, south, east, north = (float(value) for value in normalized_area.split(","))
+                if not (-180 <= west < east <= 180 and -90 <= south < north <= 90):
+                    raise ValueError
+            except ValueError as exc:
+                raise ValueError("FIRMS area must be 'world' or west,south,east,north") from exc
         self.map_key = map_key
         self.satellite = satellite
-        self.area = area
+        self.area = normalized_area
         self.days = days
         self.timeout = timeout
         self.base_url = f"{self.BASE_URL_MODERN}/api/area"
@@ -120,26 +140,42 @@ class FirmsClient:
             # Some NASA rows bundle the date+time in acq_date with empty acq_time.
             date_str = (row.get("acq_date") or row.get("date") or "").strip()
             time_str = (row.get("acq_time") or row.get("time") or "").strip()
-            if " " in date_str and not time_str:
-                # "2026-09-04 10:20:00" — split into date+time
-                date_part, time_part = date_str.split(" ", 1)
-                date_str = date_part
-                time_str = time_part.replace(":", "").lstrip("0") or "0"
+            # _firm_date_time accepts a full ISO date/time directly, preserving
+            # leading zeroes in midnight-hour timestamps.
 
             # Intensity: bright_ti4 (VIIRS) → brightness_temperature (MODIS) → bright_t31 (MODIS legacy)
             raw_int = (
                 row.get("bright_ti4")
                 or row.get("brightness_temperature")
+                or row.get("brightness")
                 or row.get("bright_t31")
             )
 
+            try:
+                latitude = float(row["latitude"]) if row.get("latitude") else None
+                longitude = float(row["longitude"]) if row.get("longitude") else None
+            except (ValueError, TypeError):
+                logger.warning("Skipping malformed FIRMS numeric row: %s", row)
+                continue
+            try:
+                intensity = float(raw_int) if raw_int else None
+                if intensity is not None and not math.isfinite(intensity):
+                    intensity = None
+            except (ValueError, TypeError):
+                intensity = None
+
+            timestamp = FirmsClient._firm_date_time(date_str, time_str)
+            if timestamp is None:
+                logger.warning("Skipping FIRMS row with invalid acquisition time")
+                continue
+
             obs = {
-                "timestamp": FirmsClient._firm_date_time(date_str, time_str),
-                "latitude": float(row["latitude"]) if row.get("latitude") else None,
-                "longitude": float(row["longitude"]) if row.get("longitude") else None,
-                "intensity": float(raw_int) if raw_int else None,
+                "timestamp": timestamp,
+                "latitude": latitude,
+                "longitude": longitude,
+                "intensity": intensity,
                 "confidence": FirmsClient._parse_confidence(row.get("confidence", "")),
-                "source": satellite.upper(),
+                "source": (satellite or "UNKNOWN").upper(),
                 "sensor": row.get("instrument") or row.get("satellite"),
                 "metadata": {
                     "frp": row.get("frp"),
@@ -152,6 +188,7 @@ class FirmsClient:
                     "bright_ti5": row.get("bright_ti5"),
                     "bright_t31": row.get("bright_t31"),
                     "brightness_temperature": row.get("brightness_temperature"),
+                    "brightness": row.get("brightness"),
                 },
             }
             rows.append(obs)
@@ -179,12 +216,13 @@ class FirmsClient:
             return 0.0
         # Numeric (MODIS): attempt direct float conversion
         try:
-            return float(raw)
+            value = float(raw)
+            return value if math.isfinite(value) and 0 <= value <= 100 else None
         except (ValueError, TypeError):
             return None
 
     @staticmethod
-    def _firm_date_time(date_str: str, time_str: str) -> datetime:
+    def _firm_date_time(date_str: str, time_str: str) -> Optional[datetime]:
         """Combine FIRMS date/time strings into a timezone-aware datetime.
 
         Modern FIRMS API (/api/area/csv) formats:
@@ -213,23 +251,11 @@ class FirmsClient:
             else:
                 raise ValueError(f"Unrecognised FIRMS date format: {ds!r}")
 
-            # Parse time — real FIRMS /api/area/csv uses HHMM in 24-hour clock
-            # (e.g. "1430" = 14:30, "1452" = 14:52). But the API also returns
-            # 2-digit values that are "minutes since midnight UTC" (e.g. "39" = 00:39,
-            # "56" = 00:56). Legacy MODIS used HHMMSS.
-            #
-            # Heuristic: 4 digits → HHMM; 2-3 digits → minutes-since-midnight; 6 → HHMMSS.
+            # FIRMS uses HHMM; CSV readers may strip leading zeroes.
             if ts.isdigit():
-                if len(ts) == 4:
-                    # HHMM (e.g. "1430" = 14:30, "1452" = 14:52, "0001" = 00:01)
-                    hour, minute, second = int(ts[:2]), int(ts[2:4]), 0
-                elif len(ts) in (2, 3):
-                    # 2-3 digit "minutes since midnight" (e.g. "39" = 00:39, "145" = 02:25)
-                    n = int(ts)
-                    if 0 <= n < 1440:
-                        hour, minute, second = n // 60, n % 60, 0
-                    else:
-                        raise ValueError(f"Unrecognised FIRMS time format: {ts!r}")
+                if len(ts) <= 4:
+                    padded = ts.zfill(4)
+                    hour, minute, second = int(padded[:2]), int(padded[2:]), 0
                 elif len(ts) == 6:
                     # HHMMSS (legacy MODIS)
                     hour, minute, second = int(ts[:2]), int(ts[2:4]), int(ts[4:6])
@@ -240,7 +266,7 @@ class FirmsClient:
             else:
                 raise ValueError(f"Unrecognised FIRMS time format: {ts!r}")
 
-            return datetime(year, month, day, hour, minute, second)
+            return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
         except (ValueError, TypeError) as e:
             logger.warning("Could not parse FIRMS date/time %s %s: %s", date_str, time_str, e)
-            return datetime.now()
+            return None

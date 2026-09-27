@@ -1,8 +1,20 @@
+import { useEffect, useState } from 'react'
 import { Outlet, NavLink, Link } from 'react-router-dom'
-import { Activity, Map, AlertTriangle } from 'lucide-react'
+import { Activity, Map, AlertTriangle, BarChart3, BrainCircuit, Fingerprint } from 'lucide-react'
+import { api } from '@/api/client'
 import './Layout.css'
 
 export default function Layout() {
+  const [dataMode, setDataMode] = useState<'DEMO DATA' | 'FIRMS SNAPSHOT' | 'LIVE MODE' | 'OFFLINE'>('OFFLINE')
+  const [sourceStatus, setSourceStatus] = useState<string>('UNAVAILABLE')
+
+  useEffect(() => {
+    void api.getHealth().then((health) => {
+      setDataMode(health.data_mode)
+      setSourceStatus(health.source_status ?? 'UNAVAILABLE')
+    }).catch(() => setDataMode('OFFLINE'))
+  }, [])
+
   return (
     <div className="layout">
       <header className="topbar">
@@ -21,19 +33,22 @@ export default function Layout() {
         <nav className="topnav">
           <NavLink to="/" end className={({ isActive }) => `topnav-link ${isActive ? 'is-active' : ''}`}>
             <Map size={14} />
-            <span>Map</span>
+            <span>Live monitoring</span>
           </NavLink>
           <NavLink to="/events" className={({ isActive }) => `topnav-link ${isActive ? 'is-active' : ''}`}>
             <AlertTriangle size={14} />
             <span>Events</span>
           </NavLink>
+          <NavLink to="/analytics" className={({ isActive }) => `topnav-link ${isActive ? 'is-active' : ''}`}><BarChart3 size={14} /><span>Analytics</span></NavLink>
+          <NavLink to="/model" className={({ isActive }) => `topnav-link ${isActive ? 'is-active' : ''}`}><BrainCircuit size={14} /><span>Model</span></NavLink>
+          <NavLink to="/evidence" className={({ isActive }) => `topnav-link ${isActive ? 'is-active' : ''}`}><Fingerprint size={14} /><span>Evidence</span></NavLink>
         </nav>
 
         <div className="topbar-right">
           <div className="system-status">
             <span className="status-dot" />
-            <span className="status-label">LIVE FEED</span>
-            <span className="status-meta mono">VIIRS NOAA-20</span>
+            <span className="status-label">{dataMode}</span>
+            <span className="status-meta mono">{dataMode === 'DEMO DATA' ? 'SYNTHETIC SCENARIOS' : dataMode === 'FIRMS SNAPSHOT' ? 'NASA FIRMS · LOCAL CAPTURE' : dataMode === 'LIVE MODE' ? sourceStatus.replace(/_/g, ' ') : 'API UNAVAILABLE'}</span>
           </div>
         </div>
       </header>

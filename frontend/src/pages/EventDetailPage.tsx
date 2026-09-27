@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, MapPin, Activity, Calendar, AlertTriangle, Layers, TrendingUp, TrendingDown, Minus, Zap, Clock, Target, Database } from 'lucide-react'
+import { ArrowLeft, MapPin, Activity, Calendar, AlertTriangle, Layers, TrendingUp, TrendingDown, Minus, Zap, Target, Database, ShieldAlert } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts'
 import { api } from '@/api/client'
 import type { ThermalEventDetail, EventHistoryPoint, ThermalProfileResponse } from '@/types'
 import { formatTimelineDate, formatObservationDate } from '@/utils/timestampUtils'
+import { classificationLabel, detectionTime, locationLabel, statusLabel } from '@/utils/intelligence'
 import './EventDetailPage.css'
 
 export default function EventDetailPage() {
@@ -13,6 +14,9 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<ThermalEventDetail | null>(null)
   const [history, setHistory] = useState<EventHistoryPoint[]>([])
   const [profile, setProfile] = useState<ThermalProfileResponse | null>(null)
+  const [evidence, setEvidence] = useState<Record<string, any> | null>(null)
+  const [anchoring, setAnchoring] = useState(false)
+  const [nearby, setNearby] = useState<{ facilities: Array<{ name?: string; type?: string; distance_km?: number }>; note?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,14 +27,19 @@ export default function EventDetailPage() {
     setLoading(true)
     setError(null)
     try {
-      const [detail, hist, prof] = await Promise.all([
+      const [detail, hist, prof, context, proof] = await Promise.allSettled([
         api.getEvent(eventId),
-        api.getEventHistory(eventId).catch(() => [] as EventHistoryPoint[]),
+        api.getEventHistory(eventId),
         api.getEventProfile(eventId),
+        api.getNearbyFacilities(eventId),
+        api.getEvidencePackage(eventId),
       ])
-      setEvent(detail)
-      setHistory(hist)
-      setProfile(prof)
+      if (detail.status === 'rejected') throw detail.reason
+      setEvent(detail.value)
+      setHistory(hist.status === 'fulfilled' ? hist.value : [])
+      setProfile(prof.status === 'fulfilled' ? prof.value : null)
+      setNearby(context.status === 'fulfilled' ? context.value as typeof nearby : null)
+      setEvidence(proof.status === 'fulfilled' ? proof.value : null)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to load event'
       setError(message)
@@ -71,16 +80,24 @@ export default function EventDetailPage() {
 
   const chartData = history.map((p) => ({
     date: formatTimelineDate(p.timestamp),
-    intensity: p.intensity ?? 0,
+    intensity: p.intensity,
     observation_count: p.observation_count,
   }))
 
   const hasProfile = !!profile && profile.observation_count > 0
+  const classification = event.risk?.classification
+  const risk = event.risk
+  const why = [
+    `${event.observation_count} ${event.observation_count === 1 ? 'detection' : 'detections'}`,
+    event.persistence?.active_days != null ? `observed on ${event.persistence.active_days} ${event.persistence.active_days === 1 ? 'day' : 'days'}` : null,
+    event.persistence?.average_intensity != null ? `mean brightness ${event.persistence.average_intensity.toFixed(1)} K` : null,
+    risk?.score != null ? `${risk.severity.toLowerCase()} operational risk (${risk.score.toFixed(0)}/100)` : null,
+  ].filter(Boolean).join(' · ')
 
   return (
     <div className="event-detail">
       <div className="event-detail-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
+        <button className="back-btn" onClick={() => navigate('/events')} aria-label="Back to events">
           <ArrowLeft size={14} />
           <span>Back</span>
         </button>
@@ -88,12 +105,55 @@ export default function EventDetailPage() {
           <span className="event-label mono">EVENT</span>
           <span className="event-id mono">#{event.id}</span>
         </div>
+        <div className="detail-heading-meta">{locationLabel(event)} · {detectionTime(event.end_time ?? event.start_time)}</div>
         <div className={`status-pill-large status-${event.status.toLowerCase()}`}>
           {event.status}
         </div>
       </div>
 
+      {event.observations.some((observation) => observation.source === 'DEMO_SYNTHETIC') && (
+        <div className="banner banner-partial">
+          <strong>DEMO DATA</strong> · Synthetic thermal observations. Classification is {classification?.model_status === 'WEAK_LABEL_PROTOTYPE' ? 'a weak-label ML prototype' : 'a rule-based fallback'}; historical baseline is not validated.
+        </div>
+      )}
+      {!event.observations.some((observation) => observation.source === 'DEMO_SYNTHETIC') && <div className="banner banner-partial"><strong>NASA FIRMS capture</strong> · Source: {event.observations[0]?.source ?? 'Unknown'}. This event is built from satellite thermal detections; fire cause and historical baseline are unverified.</div>}
+
       <div className="event-detail-body">
+        <section className="detail-panel detail-panel-wide investigation-summary">
+          <header className="detail-panel-header"><ShieldAlert size={14} /><h3>Why this event matters</h3></header>
+          <p>{why}. These measurements identify a thermal anomaly; they do not confirm a fire or its cause.</p>
+        </section>
+
+        <section className="detail-panel detail-panel-wide">
+          <header className="detail-panel-header"><Zap size={14} /><h3>Estimated classification</h3><span className="methodology-badge">{classification?.model_status?.replace(/_/g, ' ') ?? 'UNAVAILABLE'}</span></header>
+          {classification ? <div className="classification-layout">
+            <div><p className="classification-lead">{classificationLabel(classification.type)}</p>
+              <p className="classification-caveat">{classification.methodology ?? 'Rule-based classification'}</p>
+              <p className="classification-caveat">{classification.confidence != null ? `${classification.is_ml ? 'Prototype class vote' : 'Heuristic confidence'}: ${(classification.confidence * 100).toFixed(0)}%. This is separate from operational risk and is not a validated accuracy measure.` : classification.anomaly_score != null ? `Anomaly decision score: ${classification.anomaly_score.toFixed(4)}. Negative values mark outliers within this capture; this is not a fire probability.` : 'No calibrated confidence is available.'}</p>
+              <div className="classification-evidence"><strong>What influenced this estimate</strong>
+                {classification.top_contributing_features?.length ? classification.top_contributing_features.map((item) => <span key={item.feature}>{item.feature.replace(/_/g, ' ')}: {item.value.toFixed(2)}</span>) :
+                  classification.reasoning?.map((reason) => <span key={reason}>{reason}</span>)}
+              </div>
+            </div>
+            <div className="probability-list"><strong>{classification.model_status === 'UNSUPERVISED_PROTOTYPE' ? 'Model provenance' : classification.is_ml ? 'Prototype class votes' : 'Heuristic class scores'}</strong>
+              {classification.model_status === 'UNSUPERVISED_PROTOTYPE' && <p className="classification-caveat">Isolation Forest · unlabelled FIRMS event clusters · no ground truth or calibrated probabilities</p>}
+              {Object.entries(classification.probabilities ?? {}).sort((a, b) => b[1] - a[1]).map(([name, value]) => <div className="probability-row" key={name}><span>{classificationLabel(name)}</span><b>{(value * 100).toFixed(0)}%</b><div><i style={{ width: `${value * 100}%` }} /></div></div>)}
+            </div>
+          </div> : <p className="panel-empty">Classification unavailable.</p>}
+        </section>
+
+        <section className="detail-panel detail-panel-wide evidence-panel">
+          <header className="detail-panel-header"><ShieldAlert size={14} /><h3>Evidence & integrity</h3></header>
+          {evidence ? <div className="evidence-content">
+            <Field label="Evidence ID" value={String(evidence.evidence_id)} mono />
+            <Field label="SHA-256" value={String(evidence.sha256)} mono />
+            <Field label="Current content" value={evidence.integrity?.content_hash_valid ? 'Hash verified' : 'Verification failed'} />
+            <Field label="Local receipt" value={evidence.integrity?.local_anchor_valid ? 'Verified local receipt' : 'Not anchored locally'} />
+            <Field label="Blockchain" value="Not configured · no on-chain claim" />
+            <button className="primary-action" disabled={anchoring} onClick={() => { setAnchoring(true); void api.anchorLocalEvidence(eventId).then(() => api.getEvidencePackage(eventId)).then(setEvidence).finally(() => setAnchoring(false)) }}>{anchoring ? 'Saving receipt…' : 'Anchor in local audit chain'}</button>
+          </div> : <p className="panel-empty">Evidence package unavailable for this event.</p>}
+        </section>
+
         {/* EVENT INFORMATION */}
         <section className="detail-panel">
           <header className="detail-panel-header">
@@ -101,6 +161,7 @@ export default function EventDetailPage() {
             <h3>Event Information</h3>
           </header>
           <div className="detail-grid">
+            <Field label="Location" value={locationLabel(event)} />
             <Field label="Latitude" value={event.latitude.toFixed(4)} mono />
             <Field label="Longitude" value={event.longitude.toFixed(4)} mono />
             <Field label="First Detection" value={formatTimelineDate(event.start_time)} />
@@ -118,11 +179,14 @@ export default function EventDetailPage() {
           </header>
           <div className="detail-grid">
             <Field label="Detection Count" value={String(event.observation_count)} mono />
-            <Field label="Avg Intensity" value={event.persistence?.average_intensity ? `${event.persistence.average_intensity.toFixed(1)} K` : '—'} mono />
-            <Field label="Active Days" value={String(event.persistence?.active_days ?? 0)} mono />
+            <Field label="Avg Intensity" value={event.persistence?.average_intensity != null ? `${event.persistence.average_intensity.toFixed(1)} K` : '—'} mono />
+            <Field label="Peak FRP" value={event.max_frp != null ? `${event.max_frp.toFixed(1)} MW` : '—'} mono />
+            <Field label="Mean FRP" value={event.mean_frp != null ? `${event.mean_frp.toFixed(1)} MW` : '—'} mono />
+            <Field label="VIIRS Confidence" value={event.confidence_category ? `${event.confidence_category} category` : event.average_confidence != null ? `${event.average_confidence.toFixed(0)}%` : 'nominal'} mono />
+            <Field label="Active Days" value={event.persistence?.active_days != null ? String(event.persistence.active_days) : 'Unavailable'} mono />
             <Field label="Persistence Score" value={event.persistence?.persistence_score?.toFixed(2) ?? '—'} mono />
-            <Field label="Intensity Variance" value={event.persistence?.intensity_variance ? `${event.persistence.intensity_variance.toFixed(2)}` : '—'} mono />
-            <Field label="Spatial Stability" value={event.persistence?.spatial_stability ? `${event.persistence.spatial_stability.toFixed(4)}` : '—'} mono />
+            <Field label="Intensity Variance" value={event.persistence?.intensity_variance != null ? `${event.persistence.intensity_variance.toFixed(2)}` : '—'} mono />
+            <Field label="Spatial Variance (°²)" value={event.persistence?.spatial_stability != null ? `${event.persistence.spatial_stability.toFixed(6)}` : '—'} mono />
           </div>
           <div className="trend-indicator">
             <span className="trend-label">Temporal Trend:</span>
@@ -191,12 +255,12 @@ export default function EventDetailPage() {
             <div className="profile-grid">
               <div className="profile-section">
                 <h4>Temporal Features</h4>
-                <Field label="First Detection" value={profile.temporal_features.first_detection ?? '—'} mono />
-                <Field label="Last Detection" value={profile.temporal_features.last_detection ?? '—'} mono />
+                <Field label="First Detection" value={profile.temporal_features.first_detection ? formatTimelineDate(profile.temporal_features.first_detection) : '—'} mono />
+                <Field label="Last Detection" value={profile.temporal_features.last_detection ? formatTimelineDate(profile.temporal_features.last_detection) : '—'} mono />
                 <Field label="Active Days" value={String(profile.temporal_features.active_days ?? 0)} mono />
-                <Field label="Duration (hours)" value={profile.temporal_features.duration_hours !== null && profile.temporal_features.duration_hours !== undefined ? `${profile.temporal_features.duration_hours.toFixed(1)}` : '—'} mono />
+                <Field label="Duration (hours)" value={(profile.temporal_features.event_duration_hours ?? profile.temporal_features.duration_hours) != null ? `${(profile.temporal_features.event_duration_hours ?? profile.temporal_features.duration_hours)!.toFixed(1)}` : '—'} mono />
                 <Field label="Detection Frequency" value={profile.temporal_features.detection_frequency !== null && profile.temporal_features.detection_frequency !== undefined ? `${profile.temporal_features.detection_frequency.toFixed(2)} per day` : '—'} mono />
-                <Field label="Temporal Trend" value={profile.temporal_features.trend ?? 'UNKNOWN'} mono />
+                <Field label="Temporal Trend" value={statusLabel(profile.temporal_features.temporal_trend ?? profile.temporal_features.trend)} />
               </div>
 
               <div className="profile-section">
@@ -205,7 +269,7 @@ export default function EventDetailPage() {
                 <Field label="Max Brightness" value={profile.intensity_features.max_brightness_temperature !== null && profile.intensity_features.max_brightness_temperature !== undefined ? `${profile.intensity_features.max_brightness_temperature.toFixed(1)} K` : '—'} mono />
                 <Field label="Min Brightness" value={profile.intensity_features.min_brightness_temperature !== null && profile.intensity_features.min_brightness_temperature !== undefined ? `${profile.intensity_features.min_brightness_temperature.toFixed(1)} K` : '—'} mono />
                 <Field label="Intensity Variance" value={profile.intensity_features.intensity_variance !== null && profile.intensity_features.intensity_variance !== undefined ? `${profile.intensity_features.intensity_variance.toFixed(2)}` : '—'} mono />
-                <Field label="Intensity Trend" value={profile.intensity_features.intensity_trend ?? 'UNKNOWN'} mono />
+                <Field label="Intensity Trend" value={statusLabel(profile.intensity_features.intensity_trend)} />
                 <Field label="FRP Mean" value={profile.intensity_features.frp_statistics?.mean !== null && profile.intensity_features.frp_statistics?.mean !== undefined ? `${profile.intensity_features.frp_statistics.mean.toFixed(1)}` : '—'} mono />
                 <Field label="FRP Max" value={profile.intensity_features.frp_statistics?.max !== null && profile.intensity_features.frp_statistics?.max !== undefined ? `${profile.intensity_features.frp_statistics.max.toFixed(1)}` : '—'} mono />
               </div>
@@ -214,28 +278,40 @@ export default function EventDetailPage() {
                 <h4>Spatial Features</h4>
                 <Field label="Centroid Lat" value={profile.spatial_features.centroid_lat !== null && profile.spatial_features.centroid_lat !== undefined ? `${profile.spatial_features.centroid_lat.toFixed(4)}` : '—'} mono />
                 <Field label="Centroid Lon" value={profile.spatial_features.centroid_lon !== null && profile.spatial_features.centroid_lon !== undefined ? `${profile.spatial_features.centroid_lon.toFixed(4)}` : '—'} mono />
-                <Field label="Spatial Spread" value={profile.spatial_features.spatial_spread !== null && profile.spatial_features.spatial_spread !== undefined ? `${profile.spatial_features.spatial_spread.toFixed(2)}` : '—'} mono />
+                <Field label="Spatial Footprint (°²)" value={profile.spatial_features.spatial_spread !== null && profile.spatial_features.spatial_spread !== undefined ? `${profile.spatial_features.spatial_spread.toFixed(8)}` : 'Unavailable'} mono />
+                <Field label="Spatial Variance (°²)" value={profile.spatial_features.spatial_variance !== null && profile.spatial_features.spatial_variance !== undefined ? `${profile.spatial_features.spatial_variance.toFixed(8)}` : 'Unavailable'} mono />
                 <Field label="Distinct Detections" value={String(profile.spatial_features.distinct_detections ?? 0)} mono />
-                <Field label="Spatial Stability" value={profile.spatial_features.spatial_stability !== null && profile.spatial_features.spatial_stability !== undefined ? `${profile.spatial_features.spatial_stability.toFixed(4)}` : '—'} mono />
               </div>
 
               <div className="profile-section">
                 <h4>Persistence Features</h4>
                 <Field label="Persistence Score" value={profile.persistence_features.persistence_score !== null && profile.persistence_features.persistence_score !== undefined ? `${profile.persistence_features.persistence_score.toFixed(2)}` : '—'} mono />
                 <Field label="Consecutive Days" value={profile.persistence_features.consecutive_active_days !== null && profile.persistence_features.consecutive_active_days !== undefined ? String(profile.persistence_features.consecutive_active_days) : '—'} mono />
-                <Field label="Persistence Type" value={profile.persistence_features.persistence_type ?? '—'} mono />
+                <Field label="Persistence Type" value={statusLabel(profile.persistence_features.persistence_type)} />
                 <Field label="Recurrence Frequency" value={profile.persistence_features.recurrence_frequency !== null && profile.persistence_features.recurrence_frequency !== undefined ? `${profile.persistence_features.recurrence_frequency.toFixed(2)}` : '—'} mono />
               </div>
 
               <div className="profile-section">
                 <h4>Data Quality</h4>
                 <Field label="Observation Count" value={String(profile.observation_count)} mono />
-                <Field label="Baseline Status" value={profile.baseline_status} mono />
+                <Field label="Baseline Status" value={statusLabel(profile.baseline_status)} />
                 <Field label="Completeness" value={profile.data_quality.completeness !== null && profile.data_quality.completeness !== undefined ? `${(profile.data_quality.completeness * 100).toFixed(1)}%` : '—'} mono />
               </div>
             </div>
           </section>
         )}
+
+        <section className="detail-panel">
+          <header className="detail-panel-header"><Database size={14} /><h3>Historical context</h3></header>
+          <p className="context-message">{profile?.baseline_deviation ? 'Baseline comparison is available in the Thermal DNA profile.' : 'Not enough historical observations for a reliable baseline comparison.'}</p>
+          <Field label="Baseline status" value={statusLabel(profile?.baseline_status)} />
+        </section>
+
+        <section className="detail-panel">
+          <header className="detail-panel-header"><MapPin size={14} /><h3>Geospatial context</h3></header>
+          {nearby?.facilities?.length ? nearby.facilities.map((facility, index) => <p className="context-message" key={index}>{facility.name ?? 'Unnamed facility'} · {facility.type ?? 'type unavailable'} · {facility.distance_km != null ? `${facility.distance_km.toFixed(1)} km` : 'distance unavailable'}</p>) : <p className="context-message">Nearby verified facility data unavailable. Proximity has not been used to infer a cause.</p>}
+          {nearby?.note && <p className="context-message">{nearby.note}</p>}
+        </section>
 
         {/* RISK ASSESSMENT */}
         <RiskAssessmentSection event={event} />
@@ -253,9 +329,18 @@ export default function EventDetailPage() {
                   {formatObservationDate(o.timestamp)}
                 </span>
                 <span className="mono obs-intensity">
-                  {o.intensity?.toFixed(1) ?? '—'} K
+                  {o.intensity != null ? `${o.intensity.toFixed(1)} K` : 'Unavailable'}
                 </span>
-                <span className="obs-source">{o.source}</span>
+                <span className="obs-frp mono">
+                  {o.frp != null ? `FRP: ${o.frp.toFixed(1)} MW` : 'FRP: —'}
+                </span>
+                <span className="obs-source">
+                  {o.satellite ? `${o.satellite} (${o.instrument ?? 'VIIRS'})` : o.source}
+                </span>
+                <span className="obs-source">
+                  {o.confidence_category ? `VIIRS ${o.confidence_category}` : o.confidence != null ? `${o.confidence.toFixed(0)}% conf` : 'nominal'}
+                  {o.daynight ? ` · ${o.daynight === 'D' ? 'Day' : 'Night'}` : ''}
+                </span>
               </div>
             ))}
             {event.observations.length > 10 && (
@@ -264,6 +349,11 @@ export default function EventDetailPage() {
               </div>
             )}
           </div>
+          <details className="raw-evidence">
+            <summary>Observation provenance and coordinates</summary>
+            <p>These records are {event.observations.some((observation) => observation.source === 'DEMO_SYNTHETIC') ? 'synthetic demonstration observations' : 'captured NASA FIRMS observations'}. The evidence package can be checked with SHA-256 and optionally anchored in the local audit chain.</p>
+            {event.observations.slice(0, 10).map((observation) => <p key={observation.id}>#{observation.id} · {observation.source} · {observation.latitude.toFixed(4)}, {observation.longitude.toFixed(4)} · {detectionTime(observation.timestamp)}</p>)}
+          </details>
         </section>
       </div>
     </div>
@@ -291,17 +381,12 @@ function RiskAssessmentSection({ event }: { event: ThermalEventDetail }) {
 
   const severityColors: Record<string, string> = {
     CRITICAL: '#ff3b30',
-    HIGH: '#ff9500',
-    MEDIUM: '#ffcc00',
+    HIGH: '#ff3b30',
+    MEDIUM: '#ff9500',
     LOW: '#34c759',
   }
 
   const severityColor = severityColors[risk.severity?.toUpperCase()] ?? '#8b9eb0'
-
-  // Determine methodology label
-  const isStored = !risk.is_computed
-  const isRuleBased = risk.methodology?.includes('rule-based') ?? risk.classification?.methodology?.includes('rule-based') ?? false
-  const methodologyLabel = isStored ? 'RULE-BASED' : isRuleBased ? 'RULE-BASED' : 'Computed'
 
   return (
     <section className="detail-panel detail-panel-wide">
@@ -309,7 +394,7 @@ function RiskAssessmentSection({ event }: { event: ThermalEventDetail }) {
         <Target size={14} />
         <h3>Risk Assessment</h3>
         <span className="methodology-badge">
-          {methodologyLabel}
+          RULE-BASED OPERATIONAL PRIORITY
         </span>
       </header>
 
@@ -332,53 +417,6 @@ function RiskAssessmentSection({ event }: { event: ThermalEventDetail }) {
           <div className="risk-score-number">{risk.score?.toFixed(1) ?? 0}/100</div>
         </div>
 
-        {/* Event Classification */}
-        {risk.classification && (
-          <div className="risk-classification-card">
-            <div className="risk-card-header">
-              <Zap size={14} />
-              <span>Event Classification</span>
-            </div>
-            <div className="classification-type">
-              {formatClassification(risk.classification.type)}
-            </div>
-            <div className="classification-confidence">
-              Confidence: {(risk.classification.confidence * 100).toFixed(0)}%
-            </div>
-            <div className="classification-method">
-              {risk.classification.methodology || 'Rule-based classification'}
-            </div>
-          </div>
-        )}
-
-        {/* Persistence Prediction */}
-        {risk.persistence_prediction && (
-          <div className="risk-persistence-card">
-            <div className="risk-card-header">
-              <Clock size={14} />
-              <span>Persistence Prediction</span>
-            </div>
-            <div className="persistence-likelihood">
-              {risk.persistence_prediction.likelihood}
-            </div>
-            <div className="persistence-horizon">
-              ~{risk.persistence_prediction.time_horizon_days} days expected
-            </div>
-          </div>
-        )}
-
-        {/* Escalation Probability */}
-        {risk.escalation_probability !== undefined && (
-          <div className="risk-escalation-card">
-            <div className="risk-card-header">
-              {risk.escalation_probability > 0.3 ? <TrendingUp size={14} /> : <Minus size={14} />}
-              <span>Escalation Probability</span>
-            </div>
-            <div className={`escalation-value ${risk.escalation_probability > 0.3 ? 'high' : 'low'}`}>
-              {(risk.escalation_probability * 100).toFixed(0)}%
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Contributing Factors */}
@@ -409,6 +447,7 @@ function RiskAssessmentSection({ event }: { event: ThermalEventDetail }) {
           <div className="explanation-text">{risk.explanation}</div>
         </div>
       )}
+      <p className="context-message">This score prioritizes investigation. It is separate from model confidence and does not establish fire cause or future escalation.</p>
     </section>
   )
 }
@@ -428,18 +467,4 @@ function TrendIcon({ trend }: { trend: string }) {
   if (trend === 'DECREASING') return <TrendingDown size={16} className="trend-icon trend-decreasing" />
   if (trend === 'STABLE') return <Minus size={16} className="trend-icon trend-stable" />
   return <Minus size={16} className="trend-icon trend-unknown" />
-}
-
-function formatClassification(type: string): string {
-  const labels: Record<string, string> = {
-    INDUSTRIAL_THERMAL_SOURCE: 'Industrial Thermal Source',
-    INDUSTRIAL_FIRE: 'Industrial Fire',
-    AGRICULTURAL_BURNING: 'Agricultural Burning',
-    PERSISTENT_THERMAL_SOURCE: 'Persistent Thermal Source',
-    NATURAL_SOURCE: 'Natural Thermal Source',
-    TEMPORARY_THERMAL_EVENT: 'Temporary Thermal Event',
-    OTHER: 'Other/Unknown',
-    UNKNOWN: 'Unknown',
-  }
-  return labels[type] ?? type
 }

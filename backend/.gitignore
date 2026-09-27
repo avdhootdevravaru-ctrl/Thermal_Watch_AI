@@ -34,3 +34,8 @@ htmlcov/
 # Logs
 *.log
 logs/
+models/*.joblib
+data/firms_latest_raw.csv
+data/firms_latest_raw.json
+data/firms_latest_clean.jsonl
+data/evidence_local_chain.jsonl

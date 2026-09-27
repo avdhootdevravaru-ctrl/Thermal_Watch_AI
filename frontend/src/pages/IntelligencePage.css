@@ -1,0 +1,15 @@
+.intelligence-page { padding: 28px; width: 100%; overflow: auto; color: var(--text-primary); }
+.intelligence-page h1 { font-size: clamp(24px, 3vw, 36px); margin: 8px 0; }
+.intelligence-intro { color: var(--text-secondary); max-width: 760px; font-size: 13px; line-height: 1.6; margin-bottom: 22px; }
+.intelligence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.intelligence-card { padding: 19px; display: grid; gap: 13px; }
+.intelligence-card h2 { font-size: 18px; overflow-wrap: anywhere; }
+.intelligence-card p { font-size: 12px; line-height: 1.6; color: var(--text-secondary); overflow-wrap: anywhere; }
+.intelligence-metric { display: flex; gap: 12px; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+.intelligence-metric span { color: var(--text-secondary); }
+.intelligence-metric strong { text-align: right; overflow-wrap: anywhere; }
+.evidence-list a { display: grid; gap: 3px; padding: 10px; color: var(--text-primary); text-decoration: none; background: var(--bg-tertiary); border-radius: 5px; font-size: 12px; }
+.evidence-list a:hover { color: var(--accent-primary); }
+.evidence-list a span { color: var(--text-secondary); font-size: 11px; }
+@media (max-width: 1000px) { .intelligence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .intelligence-page { padding: 16px; } .intelligence-grid { grid-template-columns: 1fr; } }

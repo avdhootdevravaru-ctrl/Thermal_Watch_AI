@@ -34,6 +34,20 @@ class ThermalEventCreate(ThermalEventBase):
 
 class ThermalEventRead(ThermalEventBase):
     id: int
+    location_name: Optional[str] = None
+    average_intensity: Optional[float] = None
+    average_confidence: Optional[float] = None
+    confidence_category: Optional[str] = None
+    source: Optional[str] = None
+    classification_type: Optional[str] = None
+    classification_model_status: Optional[str] = None
+    anomaly_score: Optional[float] = None
+    risk_score: Optional[float] = None
+    risk_severity: Optional[str] = None
+    active_days: Optional[int] = None
+    duration_hours: Optional[float] = None
+    mean_frp: Optional[float] = None
+    max_frp: Optional[float] = None
 
     model_config = {"from_attributes": True}
 

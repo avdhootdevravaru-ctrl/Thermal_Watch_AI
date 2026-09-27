@@ -1,5 +1,6 @@
 .event-detail {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -15,6 +16,7 @@
   border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
+.detail-heading-meta { min-width: 0; color: var(--text-secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .back-btn {
   display: flex;
@@ -71,6 +73,7 @@
 
 .event-detail-body {
   flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-md);
@@ -78,6 +81,7 @@
   overflow-y: auto;
   align-content: start;
 }
+.event-detail > .banner { flex-shrink: 0; margin: 12px 16px 0; }
 
 .detail-panel {
   background: var(--bg-secondary);
@@ -189,7 +193,7 @@
 
 .obs-row {
   display: grid;
-  grid-template-columns: 1.4fr 0.6fr 1fr;
+  grid-template-columns: 1.4fr .7fr 1fr 1fr;
   gap: var(--space-sm);
   align-items: center;
   padding: 6px 10px;
@@ -481,8 +485,38 @@
 /* Thermal Profile Section */
 .profile-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-sm);
+}
+.investigation-summary { border-left: 3px solid var(--accent-primary); }
+.investigation-summary p { font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+.classification-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, .9fr); gap: 24px; }
+.classification-lead { font-size: 20px; font-weight: 700; line-height: 1.25; margin-bottom: 10px; }
+.classification-caveat, .context-message { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.classification-caveat + .classification-caveat { margin-top: 6px; }
+.classification-evidence { display: grid; gap: 5px; margin-top: 16px; font-size: 12px; color: var(--text-secondary); }
+.classification-evidence strong, .probability-list > strong { color: var(--text-primary); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.classification-evidence span::before { content: '•'; color: var(--accent-primary); margin-right: 7px; }
+.probability-list { display: grid; align-content: start; gap: 8px; }
+.probability-row { display: grid; grid-template-columns: 1fr auto; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+.probability-row b { color: var(--text-primary); }
+.probability-row > div { grid-column: 1 / -1; height: 5px; border-radius: 4px; overflow: hidden; background: var(--bg-tertiary); }
+.probability-row i { display: block; height: 100%; background: var(--accent-primary); }
+.raw-evidence { border-top: 1px solid var(--border-subtle); padding-top: 10px; color: var(--text-secondary); font-size: 11px; }
+.raw-evidence summary { cursor: pointer; font-weight: 700; }
+.raw-evidence p { padding: 5px 0; }
+@media (max-width: 950px) {
+  .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .event-detail-body { grid-template-columns: 1fr; }
+  .detail-panel-wide { grid-column: auto; }
+}
+@media (max-width: 620px) {
+  .event-detail-header { flex-wrap: wrap; }
+  .detail-heading-meta { width: 100%; order: 3; }
+  .event-detail-body { padding: 12px; }
+  .classification-layout, .profile-grid { grid-template-columns: 1fr; }
+  .obs-row { grid-template-columns: 1fr 1fr; }
+  .detail-grid { grid-template-columns: 1fr 1fr; }
 }
 
 .profile-section {
@@ -518,3 +552,5 @@
   color: var(--text-primary);
   font-weight: 600;
 }
+.evidence-content { padding: 18px; display: grid; gap: 12px; }
+.evidence-content .detail-field-value { overflow-wrap: anywhere; }

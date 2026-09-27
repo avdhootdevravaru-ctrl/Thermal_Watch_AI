@@ -330,9 +330,9 @@ def compute_risk_score(
     if avg_intensity and avg_intensity >= 350:
         explanations.append("Very high brightness temperature indicates intense heat source")
     if classification["classification"] == "INDUSTRIAL_THERMAL_SOURCE":
-        explanations.append("Pattern consistent with industrial thermal source")
+        explanations.append("Thermal pattern matches the industrial-source heuristic; facility context is unverified")
     if classification["classification"] == "AGRICULTURAL_BURNING":
-        explanations.append("Pattern consistent with agricultural burning activity")
+        explanations.append("Thermal pattern matches the agricultural-burning heuristic; land-use context is unverified")
 
     explanation = ". ".join(explanations) if explanations else "No specific risk factors identified."
 
@@ -341,12 +341,11 @@ def compute_risk_score(
         "severity": severity,
         "factors": factors,
         "explanation": explanation,
-        "escalation_probability": 0.0 if trend != "INCREASING" else round(persistence_score / 20.0, 2),
-        "persistence_prediction": {
-            "likelihood": "HIGH" if persistence_score >= 5.0 else "MODERATE" if persistence_score >= 2.0 else "LOW",
-            "confidence": min(0.5 + (persistence_score * 0.05), 0.9),
-            "time_horizon_days": max(1, int(persistence_score)),
-        },
+        # No validated forecasting model exists. Keep these legacy response
+        # keys explicit rather than emitting invented probabilities/horizons.
+        "escalation_probability": None,
+        "persistence_prediction": None,
+        "forecast_status": "UNAVAILABLE_NO_VALIDATED_MODEL",
     }
 
 

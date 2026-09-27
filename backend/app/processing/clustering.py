@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from math import cos, hypot, radians
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -163,7 +164,16 @@ def cluster_observations(
                     if neighbor_key in cell_map:
                         for i in indices:
                             for j in cell_map[neighbor_key]:
-                                if i != j:
+                                if j <= i:
+                                    continue
+                                _, lat_i, lon_i, time_i = parsed[i]
+                                _, lat_j, lon_j, time_j = parsed[j]
+                                if abs((time_i - time_j).total_seconds()) > time_hours * 3600:
+                                    continue
+                                mid_lat = radians((lat_i + lat_j) / 2)
+                                distance = hypot(111_200 * (lat_i - lat_j),
+                                                 111_200 * cos(mid_lat) * (lon_i - lon_j))
+                                if distance <= distance_meters:
                                     union(i, j)
 
     # Group by connected component

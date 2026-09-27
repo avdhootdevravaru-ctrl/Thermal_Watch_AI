@@ -4,7 +4,8 @@ import './Sidebar.css'
 
 interface SidebarProps {
   summary: MapHotspotsResponse['risk_summary'] | null
-  totalEvents: number
+  totalEvents: number | null
+  dataMode: 'DEMO DATA' | 'LIVE MODE' | null
   recentEvents: ThermalEventRead[]
   historicalStatistics: HistoricalStatistics | null
   dataQualityReport: DataQualityReport | null
@@ -16,6 +17,7 @@ interface SidebarProps {
 export default function Sidebar({
   summary,
   totalEvents,
+  dataMode,
   recentEvents,
   historicalStatistics,
   dataQualityReport,
@@ -36,20 +38,20 @@ export default function Sidebar({
           <RiskCard
             severity="high"
             label="HIGH"
-            count={summary?.high ?? 0}
-            description="Persistent thermal sources (≥5 detections)"
+            count={summary?.high ?? null}
+            description="Rule-based risk score ≥50"
           />
           <RiskCard
             severity="medium"
             label="MEDIUM"
-            count={summary?.medium ?? 0}
-            description="Active thermal events"
+            count={summary?.medium ?? null}
+            description="Rule-based risk score 25–49"
           />
           <RiskCard
             severity="low"
             label="LOW"
-            count={summary?.low ?? 0}
-            description="Resolved or transient"
+            count={summary?.low ?? null}
+            description="Rule-based risk score <25"
           />
         </div>
       </section>
@@ -64,13 +66,15 @@ export default function Sidebar({
         <button
           className="ingest-btn"
           onClick={onRunIngestion}
-          disabled={isIngesting}
+          disabled={isIngesting || dataMode !== 'LIVE MODE'}
         >
           {isIngesting ? (
             <>
               <span className="spinner" />
               <span>Running FIRMS ingest…</span>
             </>
+          ) : dataMode === 'DEMO DATA' ? (
+            <span>Live ingestion disabled in demo mode</span>
           ) : (
             <>
               <span>▶</span>
@@ -79,7 +83,7 @@ export default function Sidebar({
           )}
         </button>
         <p className="panel-footnote mono">
-          {totalEvents} thermal events indexed
+          {totalEvents ?? '—'} thermal events indexed · {dataMode ?? 'OFFLINE'}
         </p>
       </section>
 
@@ -94,11 +98,11 @@ export default function Sidebar({
         <div className="historical-stats">
           <div className="stat-row">
             <span className="stat-label">Total Observations</span>
-            <span className="stat-value mono">{historicalStatistics?.total_observations ?? dataQualityReport?.total_observations ?? 0}</span>
+            <span className="stat-value mono">{historicalStatistics?.total_observations ?? historicalStatistics?.observation_count ?? dataQualityReport?.total_observations ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Total Events</span>
-            <span className="stat-value mono">{historicalStatistics?.total_events ?? 0}</span>
+            <span className="stat-value mono">{historicalStatistics?.total_events ?? totalEvents ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Data Status</span>
@@ -108,27 +112,27 @@ export default function Sidebar({
           </div>
           <div className="stat-row">
             <span className="stat-label">Duplicate Observations</span>
-            <span className="stat-value mono">{dataQualityReport?.duplicate_count ?? 0}</span>
+            <span className="stat-value mono">{dataQualityReport?.duplicate_count ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Orphan Events</span>
-            <span className="stat-value mono warning">{dataQualityReport?.orphan_events ?? 0}</span>
+            <span className="stat-value mono warning">{dataQualityReport?.orphan_events ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Observation Mismatches</span>
-            <span className="stat-value mono warning">{dataQualityReport?.observation_count_mismatches ?? 0}</span>
+            <span className="stat-value mono warning">{dataQualityReport?.observation_count_mismatches ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Recurring Locations</span>
-            <span className="stat-value mono">{dataQualityReport?.recurring_locations ?? 0}</span>
+            <span className="stat-value mono">{dataQualityReport?.recurring_locations ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Active Locations</span>
-            <span className="stat-value mono">{historicalStatistics?.active_locations ?? 0}</span>
+            <span className="stat-value mono">{historicalStatistics?.active_locations ?? '—'}</span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Persistent Sources</span>
-            <span className="stat-value mono">{historicalStatistics?.persistent_sources ?? 0}</span>
+            <span className="stat-value mono">{historicalStatistics?.persistent_sources ?? '—'}</span>
           </div>
         </div>
       </section>
@@ -144,7 +148,7 @@ export default function Sidebar({
           {recentEvents.length === 0 ? (
             <div className="empty-state">
               <p>No thermal events yet.</p>
-              <p className="empty-hint">Trigger a FIRMS ingestion run to populate the system.</p>
+              <p className="empty-hint">{dataMode === 'DEMO DATA' ? 'No synthetic scenarios loaded.' : 'Trigger a FIRMS ingestion run after configuring the live database.'}</p>
             </div>
           ) : (
             recentEvents.map((e) => (
@@ -184,13 +188,13 @@ function RiskCard({
 }: {
   severity: 'high' | 'medium' | 'low'
   label: string
-  count: number
+  count: number | null
   description: string
 }) {
   return (
     <div className={`risk-card risk-${severity}`}>
       <div className="risk-card-label">{label}</div>
-      <div className="risk-card-count mono">{count}</div>
+      <div className="risk-card-count mono">{count ?? '—'}</div>
       <div className="risk-card-desc">{description}</div>
     </div>
   )

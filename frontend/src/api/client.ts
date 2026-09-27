@@ -1,5 +1,5 @@
 // ThermalWatch AI — API client
-// All requests go through Vite proxy in dev (/api -> http://localhost:8000/8001)
+// All requests go through Vite proxy in dev (/api -> http://127.0.0.1:8000)
 // In production, the same paths work behind a reverse proxy.
 
 import axios from 'axios'
@@ -11,6 +11,7 @@ import type {
   IngestionResult,
   EventHistoryPoint,
   RiskAssessment,
+  EventClassification,
   DataQualityReport,
   HistoricalStatistics,
   LocationStatistics,
@@ -62,6 +63,31 @@ export const api = {
     return data
   },
 
+  getModelStatus: async (): Promise<{ status: string; version: string | null; note: string; training_samples?: number }> => {
+    const { data } = await client.get('/health/model')
+    return data
+  },
+
+  getIngestionStatus: async (): Promise<Record<string, unknown>> => {
+    const { data } = await client.get('/ingestion/status')
+    return data
+  },
+
+  getBlockchainStatus: async (): Promise<Record<string, unknown>> => {
+    const { data } = await client.get('/blockchain/status')
+    return data
+  },
+
+  getEvidencePackage: async (eventId: number): Promise<Record<string, unknown>> => {
+    const { data } = await client.get(`/evidence/${eventId}`)
+    return data
+  },
+
+  anchorLocalEvidence: async (eventId: number): Promise<Record<string, unknown>> => {
+    const { data } = await client.post(`/evidence/${eventId}/anchor-local`)
+    return data
+  },
+
   // Ingestion
   runFirmsIngestion: async (params?: { area?: string; days?: number; satellite?: string }): Promise<IngestionResult> => {
     const { data } = await longRunningClient.post<IngestionResult>('/ingestion/firms/run', params ?? {})
@@ -86,6 +112,11 @@ export const api = {
 
   getEventRisk: async (eventId: number): Promise<RiskAssessment> => {
     const { data } = await client.get<RiskAssessment>(`/thermal-events/${eventId}/risk`)
+    return data
+  },
+
+  getEventClassification: async (eventId: number): Promise<EventClassification> => {
+    const { data } = await client.get<EventClassification>(`/thermal-events/${eventId}/classification`)
     return data
   },
 

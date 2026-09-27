@@ -37,6 +37,12 @@ function createMarkerIcon(severity: string, selected: boolean) {
   })
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[character] ?? character)
+}
+
 export default function MapView({ markers, selectedEventId, onMarkerClick, isLoading }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -86,14 +92,19 @@ export default function MapView({ markers, selectedEventId, onMarkerClick, isLoa
       const selected = marker.event_id === selectedEventId
       const icon = createMarkerIcon(severity, selected)
 
-      const markerLayer = L.marker([marker.latitude, marker.longitude], { icon })
+      const markerLayer = L.marker([marker.latitude, marker.longitude], {
+        icon, zIndexOffset: selected ? 1000 : 0,
+        title: `Event ${marker.event_id}, ${severity} operational risk`,
+      })
         .addTo(mapRef.current!)
         .bindPopup(`
           <div style="font-family:monospace;font-size:12px;min-width:160px;">
             <div style="font-weight:700;margin-bottom:4px;">Event #${marker.event_id}</div>
-            <div style="color:#8b9eb0;">Status: <span style="color:${RISK_COLORS[severity]};font-weight:700;">${marker.status}</span></div>
+            <div style="color:#8b9eb0;">Status: <span style="color:${RISK_COLORS[severity]};font-weight:700;">${escapeHtml(marker.status)}</span></div>
             <div style="color:#8b9eb0;">Detections: ${marker.observation_count}</div>
-            <div style="color:#8b9eb0;">Persistence: ${marker.persistence_score.toFixed(1)}</div>
+            <div style="color:#8b9eb0;">Detection frequency: ${marker.persistence_score.toFixed(1)}/active day</div>
+            <div style="color:#8b9eb0;">Risk: ${marker.risk_score?.toFixed(1) ?? 'unknown'}/100 (${severity.toUpperCase()})</div>
+            <div style="color:#8b9eb0;">Trend: ${marker.trend ?? 'unknown'}</div>
             ${marker.last_detection ? `<div style="color:#5a6878;margin-top:4px;">Last: ${new Date(marker.last_detection).toLocaleDateString()}</div>` : ''}
             <div style="margin-top:8px;">
               <a href="/events/${marker.event_id}" style="color:#00d9ff;font-size:11px;">View Details →</a>
@@ -104,6 +115,20 @@ export default function MapView({ markers, selectedEventId, onMarkerClick, isLoa
       void markerLayer
     })
   }, [markers, selectedEventId, mapReady, onMarkerClick])
+
+  // Frame the returned events once data arrives; keep the India overview when empty.
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || markers.length === 0) return
+    const bounds = L.latLngBounds(markers.map((marker) => [marker.latitude, marker.longitude]))
+    mapRef.current.fitBounds(bounds.pad(0.2), { maxZoom: 6 })
+  }, [markers, mapReady])
+
+  // Selecting a queue item or marker keeps the map and list on the same event.
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || selectedEventId == null) return
+    const marker = markers.find((item) => item.event_id === selectedEventId)
+    if (marker) mapRef.current.flyTo([marker.latitude, marker.longitude], Math.max(mapRef.current.getZoom(), 7), { duration: 0.5 })
+  }, [markers, mapReady, selectedEventId])
 
   return (
     <div className="map-container">

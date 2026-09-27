@@ -11,6 +11,8 @@ Tests the core pipeline stages:
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -35,6 +37,20 @@ from app.processing.functions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _firms_csv_from_rows(rows):
+    """Turn legacy normalized fixtures into the raw CSV consumed by ingestion."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["latitude", "longitude", "acq_date", "acq_time", "bright_ti4", "confidence"])
+    writer.writeheader()
+    for row in rows:
+        timestamp = datetime.fromisoformat(row["timestamp"]) if row.get("timestamp") else None
+        writer.writerow({"latitude": row.get("latitude"), "longitude": row.get("longitude"),
+                         "acq_date": timestamp.date().isoformat() if timestamp else "",
+                         "acq_time": timestamp.strftime("%H%M") if timestamp else "",
+                         "bright_ti4": row.get("intensity"), "confidence": row.get("confidence")})
+    return output.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -106,17 +122,17 @@ class TestNormalizer:
         assert dt.minute == 30
         assert dt.second == 0
 
-    def test_parse_firm_ts_minutes_since_midnight(self):
-        """2-3 digit acq_time values are minutes-since-midnight (e.g. 39 = 00:39)."""
+    def test_parse_firm_ts_unpadded_hhmm(self):
+        """CSV readers may remove leading zeroes from the FIRMS HHMM field."""
         dt = _parse_firm_ts("2026-09-04", "39")
         assert dt.hour == 0
         assert dt.minute == 39
 
-    def test_parse_firm_ts_three_digit_minutes(self):
-        """3-digit values are also minutes-since-midnight (e.g. 145 = 02:25)."""
+    def test_parse_firm_ts_three_digit_hhmm(self):
+        """145 is 01:45, not 145 minutes after midnight."""
         dt = _parse_firm_ts("2026-09-04", "145")
-        assert dt.hour == 2
-        assert dt.minute == 25
+        assert dt.hour == 1
+        assert dt.minute == 45
 
     def test_parse_firm_ts_full_iso_date(self):
         """Some NASA rows bundle the time into acq_date as a full ISO datetime."""
@@ -129,22 +145,22 @@ class TestNormalizer:
         assert dt.second == 0
 
     def test_parse_confidence_viirs_high(self):
-        assert _parse_confidence("h") == 100.0
+        assert _parse_confidence("h") is None
 
     def test_parse_confidence_viirs_nominal(self):
-        assert _parse_confidence("n") == 50.0
+        assert _parse_confidence("n") is None
 
     def test_parse_confidence_viirs_low(self):
-        assert _parse_confidence("l") == 0.0
+        assert _parse_confidence("l") is None
 
     def test_parse_confidence_modis_numeric(self):
         assert _parse_confidence("85") == 85.0
         assert _parse_confidence("42") == 42.0
 
     def test_parse_confidence_case_insensitive(self):
-        assert _parse_confidence("H") == 100.0
-        assert _parse_confidence("N") == 50.0
-        assert _parse_confidence("L") == 0.0
+        assert _parse_confidence("H") is None
+        assert _parse_confidence("N") is None
+        assert _parse_confidence("L") is None
 
     def test_parse_confidence_invalid(self):
         assert _parse_confidence("") is None
@@ -163,7 +179,8 @@ class TestNormalizer:
             "instrument": "VIIRS",
         }
         obs = normalize_observation(raw)
-        assert obs["confidence"] == 100.0
+        assert obs["confidence"] is None
+        assert obs["metadata"]["confidence_category"] == "high"
 
     def test_normalize_observation_confidence_l(self):
         raw = {
@@ -177,7 +194,8 @@ class TestNormalizer:
             "instrument": "VIIRS",
         }
         obs = normalize_observation(raw)
-        assert obs["confidence"] == 0.0
+        assert obs["confidence"] is None
+        assert obs["metadata"]["confidence_category"] == "low"
 
     def test_normalize_dataframe_basic(self):
         import pandas as pd
@@ -615,7 +633,7 @@ class TestDataQuality:
 
         # Mock the FIRMS client so no real HTTP call is made
         mock_client = Mock()
-        mock_client.fetch_observations.return_value = raw_obs
+        mock_client.fetch_csv.return_value = _firms_csv_from_rows(raw_obs)
 
         with patch("app.api.ingestion.store_observations") as mock_store, \
              patch("app.api.ingestion.cluster_observations") as mock_cluster, \
@@ -664,7 +682,7 @@ class TestDataQuality:
         db_mock.rollback = MagicMock()
 
         mock_client = Mock()
-        mock_client.fetch_observations.return_value = raw_obs
+        mock_client.fetch_csv.return_value = _firms_csv_from_rows(raw_obs)
 
         with patch("app.api.ingestion.store_observations") as mock_store, \
              patch("app.api.ingestion.cluster_observations") as mock_cluster, \

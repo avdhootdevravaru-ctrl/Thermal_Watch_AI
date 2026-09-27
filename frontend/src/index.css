@@ -85,6 +85,18 @@ html, body {
   flex-direction: column;
 }
 
+.banner {
+  padding: 10px 13px;
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--risk-medium);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 149, 0, .08);
+  color: #e3c49c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.banner-error { border-left-color: var(--risk-high); background: rgba(255, 59, 48, .08); color: #ffb3ad; }
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

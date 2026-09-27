@@ -21,6 +21,7 @@ from app.db.base import get_db
 from app.db.models import ThermalEvent, ThermalObservation, ThermalProfile, Prediction, RiskAssessment
 from app.processing.persistence import compute_persistence_score
 from app.processing.risk import classify_event, compute_risk_score, identify_non_indian_events, delete_non_indian_events
+from app.ml.classifier import classify_with_fallback
 from app.schemas.event import (
     ThermalEventDetail,
     ThermalEventList,
@@ -31,6 +32,28 @@ from app.schemas.event import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/thermal-events", tags=["events"])
+
+
+def _observation_dicts(observations: list[ThermalObservation]) -> list[dict]:
+    return [{"id": o.id, "latitude": o.latitude, "longitude": o.longitude,
+             "timestamp": o.timestamp, "intensity": o.intensity,
+             "confidence": o.confidence, "metadata_json": o.metadata_json}
+            for o in observations]
+
+
+def _classification_payload(classification: dict) -> dict:
+    return {"type": classification["classification"],
+            "confidence": classification["confidence"],
+            "probabilities": classification["probabilities"],
+            "reasoning": classification["reasoning"],
+            "is_ml": classification["is_ml"],
+            "model_status": classification["model_status"],
+            "methodology": classification["methodology"],
+            "features": classification["features"],
+            "feature_importance": classification.get("feature_importance"),
+            "top_contributing_features": classification.get("top_contributing_features", []),
+            "model_version": classification.get("model_version"),
+            "data_mode": classification.get("data_mode", "LIVE MODE")}
 
 
 @router.get("", response_model=ThermalEventList)
@@ -57,21 +80,25 @@ async def list_thermal_events(
     total = query.count()
     events = query.offset((page - 1) * page_size).limit(page_size).all()
 
-    # Use actual observation count from DB instead of potentially-stale stored value
-    from app.db.models import ThermalObservation
+    # Aggregate once for the page, avoiding one observation query per event.
     event_ids = [e.id for e in events]
     if event_ids:
-        event_obs_counts = {
-            row[0]: row[1]
+        event_obs = {
+            row[0]: {"count": row[1], "intensity": row[2], "confidence": row[3],
+                     "source": row[4] if row[5] == 1 else "MULTIPLE"}
             for row in db.query(
                 ThermalObservation.event_id,
-                func.count(ThermalObservation.id)
+                func.count(ThermalObservation.id),
+                func.avg(ThermalObservation.intensity),
+                func.avg(ThermalObservation.confidence),
+                func.min(ThermalObservation.source),
+                func.count(func.distinct(ThermalObservation.source)),
             ).filter(
                 ThermalObservation.event_id.in_(event_ids)
             ).group_by(ThermalObservation.event_id).all()
         }
     else:
-        event_obs_counts = {}
+        event_obs = {}
 
     return ThermalEventList(
         total=total,
@@ -84,7 +111,10 @@ async def list_thermal_events(
                 "longitude": e.longitude,
                 "start_time": e.start_time,
                 "end_time": e.end_time,
-                "observation_count": event_obs_counts.get(e.id, 0),
+                "observation_count": event_obs.get(e.id, {}).get("count", 0),
+                "average_intensity": event_obs.get(e.id, {}).get("intensity"),
+                "average_confidence": event_obs.get(e.id, {}).get("confidence"),
+                "source": event_obs.get(e.id, {}).get("source"),
                 "persistence_score": e.persistence_score,
                 "status": e.status,
             }
@@ -133,6 +163,8 @@ async def get_thermal_event(
 
     # Compute persistence metrics
     persistence = compute_persistence_score(observations)
+    obs_dicts = _observation_dicts(observations)
+    classification = classify_with_fallback(obs_dicts, persistence)
 
     # Get profile (Thermal DNA) if available
     profile = None
@@ -157,22 +189,11 @@ async def get_thermal_event(
             "explanation": event.risk.explanation,
             "is_computed": False,
             "methodology": "Rule-based heuristic assessment",
+            "classification": _classification_payload(classification),
         }
     else:
         # Compute risk on-the-fly from available data
-        obs_dicts = [
-            {
-                "id": o.id,
-                "latitude": o.latitude,
-                "longitude": o.longitude,
-                "timestamp": o.timestamp,
-                "intensity": o.intensity,
-                "confidence": o.confidence,
-            }
-            for o in observations
-        ]
-        classification = classify_event(persistence, obs_dicts)
-        computed_risk = compute_risk_score(persistence, classification, obs_dicts)
+        computed_risk = compute_risk_score(persistence, classify_event(persistence, obs_dicts), obs_dicts)
         risk = {
             "score": computed_risk["score"],
             "severity": computed_risk["severity"],
@@ -180,16 +201,9 @@ async def get_thermal_event(
             "explanation": computed_risk["explanation"],
             "is_computed": True,
             "methodology": "Rule-based heuristic assessment (computed on-the-fly)",
-            "escalation_probability": computed_risk.get("escalation_probability", 0.0),
-            "persistence_prediction": computed_risk.get("persistence_prediction", {}),
-            "classification": {
-                "type": classification["classification"],
-                "confidence": classification["confidence"],
-                "probabilities": classification["probabilities"],
-                "reasoning": classification["reasoning"],
-                "is_ml": False,
-                "methodology": "Rule-based classification (not ML model)",
-            },
+            "escalation_probability": computed_risk.get("escalation_probability"),
+            "persistence_prediction": computed_risk.get("persistence_prediction"),
+            "classification": _classification_payload(classification),
         }
 
     return ThermalEventDetail(
@@ -322,8 +336,8 @@ async def get_event_evidence(
         }
         for o in observations
     ]
-    classification = classify_event(persistence, obs_dicts)
-    computed_risk = compute_risk_score(persistence, classification, obs_dicts)
+    classification = classify_with_fallback(obs_dicts, persistence)
+    computed_risk = compute_risk_score(persistence, classify_event(persistence, obs_dicts), obs_dicts)
 
     evidence_items = [
         f"✓ {persistence.get('total_detections', 0)} detections over {persistence.get('active_days', 0)} day(s)",
@@ -335,12 +349,7 @@ async def get_event_evidence(
 
     return {
         "event_id": event_id,
-        "classification": {
-            "type": classification["classification"],
-            "confidence": classification["confidence"],
-            "methodology": "Rule-based classification (not ML model)",
-            "is_ml": False,
-        },
+        "classification": _classification_payload(classification),
         "evidence_chain": evidence_items,
         "risk": {
             "score": computed_risk["score"],
@@ -379,6 +388,13 @@ async def get_event_risk(
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
+    observations = db.query(ThermalObservation).filter(
+        ThermalObservation.event_id == event_id
+    ).all()
+    persistence = compute_persistence_score(observations)
+    obs_dicts = _observation_dicts(observations)
+    classification = classify_with_fallback(obs_dicts, persistence)
+
     if event.risk:
         return {
             "event_id": event_id,
@@ -389,28 +405,11 @@ async def get_event_risk(
             "created_at": event.risk.created_at,
             "is_computed": False,
             "methodology": "Rule-based heuristic assessment",
+            "classification": _classification_payload(classification),
         }
 
     # Compute on-the-fly
-    observations = db.query(ThermalObservation).filter(
-        ThermalObservation.event_id == event_id
-    ).all()
-
-    persistence = compute_persistence_score(observations)
-    obs_dicts = [
-        {
-            "id": o.id,
-            "latitude": o.latitude,
-            "longitude": o.longitude,
-            "timestamp": o.timestamp,
-            "intensity": o.intensity,
-            "confidence": o.confidence,
-        }
-        for o in observations
-    ]
-
-    classification = classify_event(persistence, obs_dicts)
-    computed_risk = compute_risk_score(persistence, classification, obs_dicts)
+    computed_risk = compute_risk_score(persistence, classify_event(persistence, obs_dicts), obs_dicts)
 
     return {
         "event_id": event_id,
@@ -418,17 +417,27 @@ async def get_event_risk(
         "severity": computed_risk["severity"],
         "contributing_factors": computed_risk["factors"],
         "explanation": computed_risk["explanation"],
-        "escalation_probability": computed_risk.get("escalation_probability", 0.0),
-        "persistence_prediction": computed_risk.get("persistence_prediction", {}),
-        "classification": {
-            "type": classification["classification"],
-            "confidence": classification["confidence"],
-            "probabilities": classification["probabilities"],
-            "reasoning": classification["reasoning"],
-        },
+        "escalation_probability": computed_risk.get("escalation_probability"),
+        "persistence_prediction": computed_risk.get("persistence_prediction"),
+        "classification": _classification_payload(classification),
         "is_computed": True,
         "methodology": "Rule-based heuristic assessment (computed on-the-fly)",
     }
+
+
+@router.get("/{event_id}/classification", response_model=dict)
+async def get_event_classification(event_id: int, db: Session = Depends(get_db)) -> dict:
+    """Classify an event with a trained local model or the documented rule fallback."""
+    event = db.query(ThermalEvent).filter(
+        ThermalEvent.id == event_id,
+        ThermalEvent.latitude >= 6.5, ThermalEvent.latitude <= 35.5,
+        ThermalEvent.longitude >= 68.0, ThermalEvent.longitude <= 97.5,
+    ).first()
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    observations = db.query(ThermalObservation).filter(ThermalObservation.event_id == event_id).all()
+    persistence = compute_persistence_score(observations)
+    return _classification_payload(classify_with_fallback(_observation_dicts(observations), persistence))
 
 
 # ---------------------------------------------------------------------------

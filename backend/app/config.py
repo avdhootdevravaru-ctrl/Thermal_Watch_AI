@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
+    DEMO_MODE: bool = False  # Explicit read-only synthetic data mode; never enabled in production implicitly
+    ML_MODEL_PATH: str = ""  # Trusted locally trained model artifact; blank means rule-based fallback
 
     # --- Database ---
     DATABASE_URL: str = "postgresql+psycopg2://thermalwatch:thermalwatch@localhost:5432/thermalwatch"
@@ -26,6 +28,7 @@ class Settings(BaseSettings):
     FIRMS_SATELLITE: str = "VIIRS_NOAA20_NRT"
     FIRMS_AREA: str = "world"
     FIRMS_DAYS: int = 1
+    FIRMS_SNAPSHOT_PATH: str = ""  # Real NASA CSV capture for local replay without PostGIS
 
     # --- Processing ---
     CLUSTER_DISTANCE_METERS: float = 1000.0

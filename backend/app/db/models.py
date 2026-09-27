@@ -249,6 +249,7 @@ class ThermalProfile(Base):
 class Classification(str, enum.Enum):
     """Possible classification labels for thermal events."""
     INDUSTRIAL_THERMAL_SOURCE = "industrial_thermal_source"
+    PERSISTENT_THERMAL_SOURCE = "persistent_thermal_source"
     INDUSTRIAL_FIRE = "industrial_fire"
     AGRICULTURAL_BURNING = "agricultural_burning"
     NATURAL_SOURCE = "natural_thermal_source"

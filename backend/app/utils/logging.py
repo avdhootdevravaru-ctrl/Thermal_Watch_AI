@@ -6,10 +6,19 @@ Uses loguru for structured, colored console output and optional file rotation.
 from __future__ import annotations
 
 import sys
+import re
 
 from loguru import logger
 
 from app.config import settings
+
+
+def redact_secrets(message: str) -> str:
+    """FIRMS places the MAP_KEY in a URL path, including httpx access logs."""
+    message = re.sub(r"(/api/area/csv/)[^/\s?]+", r"\1[REDACTED]", message)
+    if settings.FIRMS_MAP_KEY:
+        message = message.replace(settings.FIRMS_MAP_KEY, "[REDACTED]")
+    return message
 
 
 def setup_logging() -> None:
@@ -62,6 +71,9 @@ def setup_logging() -> None:
                 frame = frame.f_back
                 depth += 1
 
-            logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+            # Exception tracebacks may contain request URLs, so log the safe
+            # message only. Never allow a path-style FIRMS key into console or
+            # rotating production files.
+            logger.opt(depth=depth).log(level, redact_secrets(record.getMessage()))
 
     logging.basicConfig(handlers=[InterceptHandler()], level=0)

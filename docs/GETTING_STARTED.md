@@ -1,6 +1,10 @@
 # ThermalWatch AI — Getting Started Guide
 
-This document explains how to set up and run the ThermalWatch AI backend and frontend. The current milestone is **Task Group 1 — Historical Data + Thermal Intelligence Foundation**.
+This document covers the PostgreSQL/PostGIS deployment path. For the working
+real FIRMS local prototype when PostGIS is unavailable, follow the
+[repository quick start](../README.md#current-real-firms-prototype-windows).
+That path retains actual NASA CSV data locally, reports its capture time and
+validation counts, and labels database persistence as unavailable.
 
 ## Prerequisites
 
@@ -44,8 +48,8 @@ cp .env.example .env
 # Edit .env with your values:
 #   DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/thermalwatch
 #   FIRMS_MAP_KEY=your_firms_map_key_here
-#   FIRMS_AREA=IND       # (optional: use ISO-3166 country code)
-#   FIRMS_DAYS=10        # look-back days for sustained historical collection
+#   FIRMS_AREA=68,6.5,97.5,35.5  # India bounding box for Area API
+#   FIRMS_DAYS=5        # Area API maximum per request
 ```
 
 ### 4. Initialize the database
@@ -53,7 +57,7 @@ cp .env.example .env
 ```bash
 # Create the database first (if it doesn't exist):
 createdb thermalwatch   # Linux/macOS
-# OR use pgAdmin / SQL Server Management Studio
+# OR use pgAdmin
 
 # Enable PostGIS extension:
 psql -d thermalwatch -c "CREATE EXTENSION IF NOT EXISTS postgis;"
@@ -88,7 +92,7 @@ cd frontend
 npm run dev
 ```
 
-Open <http://localhost:5173> for the interactive GIS dashboard.
+Open <http://localhost:3000> for the interactive GIS dashboard.
 
 ### 7. Trigger a FIRMS ingestion run
 
@@ -228,8 +232,8 @@ All configuration lives in `.env` (never commit real secrets!):
 | `DATABASE_URL` | PostgreSQL+PostGIS connection string | `postgresql+psycopg2://thermalwatch:thermalwatch@localhost:5432/thermalwatch` |
 | `FIRMS_MAP_KEY` | NASA FIRMS MAP_KEY (required) | *(your key)* |
 | `FIRMS_SATELLITE` | Sensor (`VIIRS_NOAA20_NRT`, `MODIS_NRT`, etc.) | `VIIRS_NOAA20_NRT` |
-| `FIRMS_AREA` | Area code (`world` or ISO-3166 like `IND`) | `world` |
-| `FIRMS_DAYS` | Look-back days (1–10) | `1` |
+| `FIRMS_AREA` | Area API bounding box (`west,south,east,north`) or `world`; legacy `IND` maps to India box | `world` |
+| `FIRMS_DAYS` | Look-back days (1–5) | `1` |
 | `CLUSTER_DISTANCE_METERS` | Spatial clustering radius | `1000.0` |
 | `CLUSTER_TIME_HOURS` | Temporal clustering window | `72.0` |
 | `PERSISTENCE_MIN_DETECTIONS` | Min detections for persistent source | `3` |

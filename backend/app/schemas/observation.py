@@ -37,6 +37,11 @@ class ObservationSummary(BaseModel):
     longitude: float
     intensity: Optional[float] = None
     confidence: Optional[float] = None
+    confidence_category: Optional[str] = None
     source: str
+    frp: Optional[float] = None
+    satellite: Optional[str] = None
+    instrument: Optional[str] = None
+    daynight: Optional[str] = None
 
     model_config = {"from_attributes": True}

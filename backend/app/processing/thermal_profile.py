@@ -288,9 +288,9 @@ def _compute_spatial_features(observations: List[ThermalObservation]) -> Dict[st
     return {
         "centroid_lat": round(centroid_lat, 4),
         "centroid_lon": round(centroid_lon, 4),
-        "spatial_spread": round(spatial_spread, 4),
-        "spatial_variance": round(spatial_variance, 4),
-        "spatial_stability": round(spatial_stability, 4),
+        "spatial_spread": round(spatial_spread, 8),
+        "spatial_variance": round(spatial_variance, 8),
+        "spatial_stability": round(spatial_stability, 8),
         "distinct_detections": distinct_detections,
     }
 

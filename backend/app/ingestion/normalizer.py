@@ -7,6 +7,7 @@ Used by the ingestion pipeline before rows are upserted to PostgreSQL.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -30,7 +31,7 @@ COLUMN_MAP: Dict[str, str] = {
     # Thermal
     "brightness_temperature": "intensity",
     "bright_t31": "intensity",
-    "frp": "intensity",  # Fire Radiative Power as intensity proxy
+    "bright_ti4": "intensity",
 
     # Confidence (varies by sensor)
     "confidence": "confidence",
@@ -73,29 +74,39 @@ def normalize_observation(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     # Latitude
     lat = raw.get("latitude")
-    obs["latitude"] = float(lat) if lat is not None and str(lat).strip() != "" else None
+    try:
+        obs["latitude"] = float(lat) if lat is not None and str(lat).strip() != "" else None
+    except (ValueError, TypeError):
+        obs["latitude"] = None
+        invalid_coordinates = True
 
     # Longitude
     lon = raw.get("longitude")
-    obs["longitude"] = float(lon) if lon is not None and str(lon).strip() != "" else None
+    try:
+        obs["longitude"] = float(lon) if lon is not None and str(lon).strip() != "" else None
+    except (ValueError, TypeError):
+        obs["longitude"] = None
+        invalid_coordinates = True
 
     # Coordinate range validation — track if raw values were provided but out of range
-    if obs["latitude"] is not None and not (-90.0 <= obs["latitude"] <= 90.0):
+    if obs["latitude"] is not None and (not math.isfinite(obs["latitude"]) or not (-90.0 <= obs["latitude"] <= 90.0)):
         logger.warning("Invalid latitude %s outside [-90, 90]", obs["latitude"])
         invalid_coordinates = True
         obs["latitude"] = None
-    if obs["longitude"] is not None and not (-180.0 <= obs["longitude"] <= 180.0):
+    if obs["longitude"] is not None and (not math.isfinite(obs["longitude"]) or not (-180.0 <= obs["longitude"] <= 180.0)):
         logger.warning("Invalid longitude %s outside [-180, 180]", obs["longitude"])
         invalid_coordinates = True
         obs["longitude"] = None
 
     obs["_invalid_coordinates"] = invalid_coordinates
 
-    # Intensity (brightness temperature or FRP)
-    raw_int = raw.get("intensity") or raw.get("brightness_temperature") or raw.get("bright_t31") or raw.get("frp")
+    # Brightness temperature is measured in K; FRP is a distinct MW measure.
+    raw_int = next((raw[key] for key in ("intensity", "bright_ti4", "brightness_temperature", "brightness", "bright_t31")
+                    if raw.get(key) is not None and str(raw[key]).strip() != ""), None)
     if raw_int is not None and str(raw_int).strip() != "":
         try:
-            obs["intensity"] = float(raw_int)
+            value = float(raw_int)
+            obs["intensity"] = value if math.isfinite(value) else None
         except (ValueError, TypeError):
             obs["intensity"] = None
     else:
@@ -109,42 +120,44 @@ def normalize_observation(raw: Dict[str, Any]) -> Dict[str, Any]:
     obs["source"] = raw.get("source") or raw.get("satellite") or "UNKNOWN"
     obs["sensor"] = raw.get("sensor") or raw.get("satellite")
 
-    # Metadata: keep everything else for provenance
-    obs["metadata"] = {
+    # Keep FIRMS optional measurements at the top metadata level. The HTTP
+    # parser already supplies a nested metadata dict; flatten that first.
+    nested_metadata = raw.get("metadata")
+    obs["metadata"] = dict(nested_metadata) if isinstance(nested_metadata, dict) else {}
+    obs["metadata"].update({
         k: v for k, v in raw.items()
         if k not in (
-            "date", "time", "latitude", "longitude",
-            "brightness_temperature", "bright_t31", "frp", "confidence",
-            "satellite", "sensor",
+            "date", "time", "acq_date", "acq_time", "timestamp",
+            "latitude", "longitude", "intensity", "confidence",
+            "source", "satellite", "sensor", "metadata",
         )
-    }
+    })
+    if str(raw_conf).strip().lower() in {"h", "n", "l"}:
+        obs["metadata"]["confidence_category"] = {"h": "high", "n": "nominal", "l": "low"}[str(raw_conf).strip().lower()]
 
     return obs
 
 
 def _parse_confidence(raw: Any) -> Optional[float]:
-    """Parse a FIRMS confidence value to a numeric score (0–100).
+    """Return only genuine numeric FIRMS confidence percentages.
 
     VIIRS NRT uses categorical labels: 'h' (high), 'l' (low), 'n' (nominal).
     MODIS NRT uses numeric values (0–100).
 
-    Maps to 0–100 scale: h → 100, n → 50, l → 0.
-    Returns None for unknown / empty values.
+    VIIRS categories are not percentages, so they remain null here and are
+    retained separately in metadata as confidence_category.
     """
     if raw is None:
         return None
     val = str(raw).strip().lower()
     if not val:
         return None
-    if val == "h":
-        return 100.0
-    if val == "n":
-        return 50.0
-    if val == "l":
-        return 0.0
+    if val in {"h", "n", "l"}:
+        return None
     # Numeric (MODIS): try direct float conversion
     try:
-        return float(raw)
+        value = float(raw)
+        return value if math.isfinite(value) and 0 <= value <= 100 else None
     except (ValueError, TypeError):
         return None
 
@@ -193,22 +206,13 @@ def _parse_firm_ts(date_str: str, time_str: str) -> datetime:
     else:
         raise ValueError(f"Unrecognised FIRMS date format: {date_str!r}")
 
-    # Parse time — real FIRMS /api/area/csv uses HHMM in 24-hour clock
-    # (e.g. "1430" = 14:30). But 2-digit values are "minutes since midnight"
-    # (e.g. "39" = 00:39). Legacy MODIS used HHMMSS.
+    # FIRMS uses HHMM; CSV readers may strip leading zeroes.
     if not time_str or time_str == "0":
         hour, minute, second = 0, 0, 0
     elif time_str.isdigit():
-        if len(time_str) == 4:
-            # HHMM (e.g. "1430" = 14:30)
-            hour, minute, second = int(time_str[:2]), int(time_str[2:4]), 0
-        elif len(time_str) in (2, 3):
-            # 2-3 digit "minutes since midnight" (e.g. "39" = 00:39)
-            n = int(time_str)
-            if 0 <= n < 1440:
-                hour, minute, second = n // 60, n % 60, 0
-            else:
-                raise ValueError(f"Unrecognised FIRMS time format: {time_str!r}")
+        if len(time_str) <= 4:
+            padded = time_str.zfill(4)
+            hour, minute, second = int(padded[:2]), int(padded[2:]), 0
         elif len(time_str) == 6:
             # HHMMSS (legacy MODIS)
             hour, minute, second = int(time_str[:2]), int(time_str[2:4]), int(time_str[4:6])
@@ -237,8 +241,8 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         "longitude": "longitude",
         "bright_ti4": "intensity",    # VIIRS brightness temp
         "brightness_temperature": "intensity",  # MODIS
+        "brightness": "intensity",              # FIRMS MODIS Area API
         "bright_t31": "intensity",    # MODIS legacy
-        "frp": "intensity",           # Fire Radiative Power as intensity proxy
         "confidence": "confidence",
         "satellite": "source",
     }

@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db
@@ -52,8 +52,8 @@ async def get_historical_statistics(
 
 @router.get("/location/{lat}/{lon}/statistics", tags=["historical intelligence"])
 async def get_location_statistics(
-    lat: float = Query(..., ge=-90, le=90),
-    lon: float = Query(..., ge=-180, le=180),
+    lat: float = Path(..., ge=-90, le=90),
+    lon: float = Path(..., ge=-180, le=180),
     radius_km: float = Query(50.0, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -63,8 +63,8 @@ async def get_location_statistics(
 
 @router.get("/location/{lat}/{lon}/baseline", tags=["historical intelligence"])
 async def get_location_baseline(
-    lat: float = Query(..., ge=-90, le=90),
-    lon: float = Query(..., ge=-180, le=180),
+    lat: float = Path(..., ge=-90, le=90),
+    lon: float = Path(..., ge=-180, le=180),
     radius_km: float = Query(50.0, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -74,8 +74,8 @@ async def get_location_baseline(
 
 @router.post("/location/{lat}/{lon}/compare", tags=["historical intelligence"])
 async def compare_location_to_baseline(
-    lat: float = Query(..., ge=-90, le=90),
-    lon: float = Query(..., ge=-180, le=180),
+    lat: float = Path(..., ge=-90, le=90),
+    lon: float = Path(..., ge=-180, le=180),
     radius_km: float = Query(50.0, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict:

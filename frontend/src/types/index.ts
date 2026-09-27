@@ -8,7 +8,12 @@ export interface ObservationSummary {
   longitude: number
   intensity: number | null
   confidence: number | null
+  confidence_category?: string | null
   source: string
+  frp?: number | null
+  satellite?: string | null
+  instrument?: string | null
+  daynight?: string | null
 }
 
 export interface PersistenceMetrics {
@@ -26,6 +31,20 @@ export interface PersistenceMetrics {
 
 export interface ThermalEventRead {
   id: number
+  location_name?: string | null
+  average_intensity?: number | null
+  average_confidence?: number | null
+  confidence_category?: string | null
+  source?: string | null
+  classification_type?: string | null
+  classification_model_status?: string | null
+  anomaly_score?: number | null
+  risk_score?: number | null
+  risk_severity?: string | null
+  active_days?: number | null
+  duration_hours?: number | null
+  mean_frp?: number | null
+  max_frp?: number | null
   latitude: number
   longitude: number
   start_time: string
@@ -85,6 +104,9 @@ export interface HealthStatus {
   status: 'ok'
   service: string
   version: string
+  data_mode: 'DEMO DATA' | 'FIRMS SNAPSHOT' | 'LIVE MODE'
+  source_status?: string
+  classifier_status: 'TRAINED_MODEL' | 'UNSUPERVISED_PROTOTYPE' | 'WEAK_LABEL_PROTOTYPE' | 'RULE_BASED_FALLBACK'
 }
 
 export interface RiskAssessment {
@@ -95,8 +117,8 @@ export interface RiskAssessment {
   created_at?: string
   is_computed?: boolean
   methodology?: string
-  escalation_probability?: number
-  persistence_prediction?: PersistencePrediction
+  escalation_probability?: number | null
+  persistence_prediction?: PersistencePrediction | null
   classification?: EventClassification
 }
 
@@ -114,11 +136,18 @@ export interface PersistencePrediction {
 
 export interface EventClassification {
   type: string
-  confidence: number
+  confidence: number | null
   probabilities: Record<string, number>
   reasoning: string[]
   is_ml?: boolean
+  model_status?: 'TRAINED_MODEL' | 'UNSUPERVISED_PROTOTYPE' | 'WEAK_LABEL_PROTOTYPE' | 'RULE_BASED_FALLBACK'
+  anomaly_score?: number | null
+  features?: Record<string, number | null>
+  feature_importance?: Record<string, number> | null
+  top_contributing_features?: Array<{ feature: string; value: number; probability_change: number }>
+  model_version?: string
   methodology?: string
+  data_mode?: 'DEMO DATA' | 'FIRMS SNAPSHOT' | 'LIVE MODE'
 }
 
 export interface EventHistoryPoint {
@@ -137,6 +166,13 @@ export type TrendDirection = 'INCREASING' | 'DECREASING' | 'STABLE' | 'UNKNOWN'
 // --- Historical Intelligence Types ---
 
 export interface DataQualityReport {
+  records_received?: number
+  records_accepted?: number
+  records_rejected?: number
+  invalid_timestamps?: number
+  missing_values?: Record<string, number>
+  capture_time?: string | null
+  database_status?: string
   total_observations: number
   observations_by_date: Record<string, number>
   observations_by_source: Record<string, number>
@@ -152,8 +188,8 @@ export interface DataQualityReport {
 }
 
 export interface HistoricalStatistics {
-  total_observations: number
-  total_events: number
+  total_observations?: number
+  total_events?: number
   observation_count: number
   status: string
   observations_by_day: Record<string, number>
@@ -198,10 +234,12 @@ export interface TemporalFeatures {
   last_detection: string | null
   active_days: number | null
   duration_hours: number | null
+  event_duration_hours?: number | null
   detection_frequency: number | null
   recurrence: number | null
   temporal_pattern: string | null
   trend: string | null
+  temporal_trend?: string | null
   status: string
 }
 
