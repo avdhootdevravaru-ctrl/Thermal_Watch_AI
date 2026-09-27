@@ -1,0 +1,292 @@
+{
+  "artifact_hash": "066b69f194245378bf24864d3d682ed2b46dfe05c146bb7b2556586f0102549e",
+  "calibrated": false,
+  "capture_hash": "67fe4f828bdb24c6e1ec51f01e0e5a1f8f17dd4a1be360d6fce62b604bbded13",
+  "class_counts": {
+    "multi_day_recurrence": 24,
+    "single_day_observed": 49
+  },
+  "class_names": [
+    "multi_day_recurrence",
+    "single_day_observed"
+  ],
+  "dataset_fingerprint": "106d4e1ecc89f9ab2276605eec97c2164b233ac74155c47b9bf28d25cf777076",
+  "eligible_samples": 73,
+  "evaluation": {
+    "accuracy": 0.6296296296296297,
+    "balanced_accuracy": 0.6282894736842105,
+    "class_order": [
+      "multi_day_recurrence",
+      "single_day_observed"
+    ],
+    "confusion_matrix": [
+      [
+        5,
+        3
+      ],
+      [
+        7,
+        12
+      ]
+    ],
+    "f1_macro": 0.6029411764705883,
+    "f1_positive": 0.5,
+    "holdout_size": 27,
+    "limitations": [
+      "Labels are derived from later observations in the same capture, not independent fire-cause review.",
+      "The small same-capture geographic holdout does not establish future-capture generalization; nearby cells may remain correlated.",
+      "Events requiring future detections to connect their first-day members are excluded; labels remain retrospective cluster re-detection.",
+      "A single-day observation can reflect satellite revisit limits, cloud, or capture timing rather than source cessation.",
+      "If metrics remain poor, it indicates weak signal in the feature set for this label definition."
+    ],
+    "model_comparison": {
+      "HistGradientBoosting": {
+        "fold_f1": [
+          0.6,
+          0.6086956521739131,
+          0.3157894736842105
+        ],
+        "mean_training_cv_f1": 0.5081617086193746
+      },
+      "LogisticRegression": {
+        "fold_f1": [
+          0.8,
+          0.5714285714285714,
+          0.25
+        ],
+        "mean_training_cv_f1": 0.5404761904761904
+      },
+      "RandomForest": {
+        "fold_f1": [
+          0.0,
+          0.42857142857142855,
+          0.2222222222222222
+        ],
+        "mean_training_cv_f1": 0.2169312169312169
+      }
+    },
+    "per_class": {
+      "accuracy": 0.6296296296296297,
+      "macro avg": {
+        "f1-score": 0.6029411764705883,
+        "precision": 0.6083333333333334,
+        "recall": 0.6282894736842105,
+        "support": 27.0
+      },
+      "multi_day_recurrence": {
+        "f1-score": 0.5,
+        "precision": 0.4166666666666667,
+        "recall": 0.625,
+        "support": 8.0
+      },
+      "single_day_observed": {
+        "f1-score": 0.7058823529411765,
+        "precision": 0.8,
+        "recall": 0.631578947368421,
+        "support": 19.0
+      },
+      "weighted avg": {
+        "f1-score": 0.6448801742919391,
+        "precision": 0.6864197530864198,
+        "recall": 0.6296296296296297,
+        "support": 27.0
+      }
+    },
+    "pr_auc": 0.6510149572649573,
+    "precision_positive": 0.4166666666666667,
+    "recall_positive": 0.625,
+    "roc_auc": 0.736842105263158,
+    "scope": "Untouched geographic group holdout within one FIRMS capture; not temporal validation",
+    "selection_method": "Three-fold geographic group CV on training records only; highest recurrence F1",
+    "split_method": "Fixed seed 42, 1-degree first-day centroid cells; 25% of groups held out"
+  },
+  "feature_importance": {
+    "frp_variance": 0.583665,
+    "intensity_variance": 0.826752,
+    "max_frp": 0.009097,
+    "max_intensity": 0.392486,
+    "mean_frp": 0.019805,
+    "mean_intensity": 0.537393,
+    "mean_scan": 0.759208,
+    "mean_secondary_brightness": 0.212111,
+    "mean_track": 0.502699,
+    "night_fraction": 0.067974,
+    "observation_count": 0.450742,
+    "spatial_spread_km": 0.387532,
+    "spatial_stability": 0.208842,
+    "temporal_trend": 0.0
+  },
+  "feature_medians": {
+    "frp_variance": 0.17639999999999997,
+    "intensity_variance": 0.9408999999999978,
+    "max_frp": 1.87,
+    "max_intensity": 309.84000000000003,
+    "mean_frp": 1.775,
+    "mean_intensity": 309.60749999999996,
+    "mean_scan": 0.46,
+    "mean_secondary_brightness": 293.14,
+    "mean_track": 0.47,
+    "night_fraction": 1.0,
+    "observation_count": 1.0,
+    "spatial_spread_km": 0.21539465443371505,
+    "spatial_stability": 3.71e-06,
+    "temporal_trend": 0.0
+  },
+  "feature_names": [
+    "observation_count",
+    "temporal_trend",
+    "spatial_stability",
+    "mean_intensity",
+    "max_intensity",
+    "intensity_variance",
+    "mean_frp",
+    "max_frp",
+    "frp_variance",
+    "mean_secondary_brightness",
+    "mean_scan",
+    "mean_track",
+    "night_fraction",
+    "spatial_spread_km"
+  ],
+  "feature_version": "event-features-v3-first-day-v2",
+  "format": "ignis-firms-recurrence-v1",
+  "holdout_event_ids": [
+    4370347,
+    31319613,
+    103530610,
+    133971845,
+    135292817,
+    485849544,
+    787986580,
+    1003689325,
+    1020979539,
+    1083177958,
+    1210908842,
+    1221416008,
+    1977685046,
+    2222455235,
+    2364366469,
+    2764132209,
+    2769662757,
+    2894666417,
+    3204807094,
+    3447256364,
+    3466454183,
+    3563655485,
+    3852910222,
+    4000350986,
+    4207882694,
+    4235017829,
+    4256364424
+  ],
+  "holdout_groups": [
+    "21:96",
+    "23:86",
+    "24:73",
+    "25:69",
+    "25:97",
+    "27:94",
+    "27:95",
+    "27:96",
+    "28:77",
+    "30:72",
+    "33:72",
+    "6:81",
+    "8:80"
+  ],
+  "holdout_samples": 27,
+  "independently_validated": false,
+  "label_strategy": "For eligible events first observed at least two calendar days before the capture's latest observation, label multi_day_recurrence when that event has a detection on a later date; otherwise label single_day_observed. Only first-day measurements enter the model. Satellite non-detection is not proof that heat ceased.",
+  "model_type": "LogisticRegression",
+  "random_seed": 42,
+  "trained_at": "2026-09-27T14:34:33.892243+00:00",
+  "training_dataset": "Validated VIIRS_NOAA20_NRT local FIRMS capture; first-day event measurements",
+  "training_event_ids": [
+    32638694,
+    52136320,
+    67380425,
+    166247976,
+    174439422,
+    353368943,
+    470101224,
+    526817641,
+    664594423,
+    956949188,
+    1162829639,
+    1197971839,
+    1212169587,
+    1284542573,
+    1288203254,
+    1325784062,
+    1356695729,
+    1454371241,
+    1488270576,
+    1733697203,
+    2061303223,
+    2141455257,
+    2204317228,
+    2212230564,
+    2294867992,
+    2452725428,
+    2573031799,
+    2864464097,
+    2905138858,
+    2951547927,
+    3004946535,
+    3148721788,
+    3263032064,
+    3285975777,
+    3438534810,
+    3485206899,
+    3591812201,
+    3624142515,
+    3640185572,
+    3865571443,
+    3895775888,
+    4012969310,
+    4014582766,
+    4075355321,
+    4087654446,
+    4172858393
+  ],
+  "training_groups": [
+    "15:75",
+    "18:72",
+    "19:71",
+    "20:71",
+    "21:97",
+    "22:69",
+    "22:86",
+    "22:87",
+    "22:88",
+    "22:90",
+    "23:70",
+    "24:74",
+    "24:86",
+    "25:68",
+    "25:93",
+    "26:74",
+    "26:91",
+    "27:68",
+    "27:71",
+    "27:76",
+    "28:68",
+    "28:69",
+    "28:76",
+    "29:71",
+    "30:70",
+    "30:74",
+    "30:76",
+    "31:75",
+    "31:76",
+    "32:70",
+    "32:71",
+    "32:72",
+    "32:74",
+    "33:71",
+    "7:81",
+    "9:80"
+  ],
+  "training_samples": 46,
+  "version": "firms-recurrence-v2-106d4e1e"
+}

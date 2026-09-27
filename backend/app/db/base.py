@@ -33,6 +33,7 @@ def _get_engine() -> Engine:
                 _engine = create_engine(
                     settings.DATABASE_URL,
                     pool_pre_ping=True,
+                    connect_args={"connect_timeout": 3} if settings.DATABASE_URL.startswith("postgresql") else {},
                     echo=False,
                 )
     return _engine

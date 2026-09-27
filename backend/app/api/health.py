@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.db.base import engine
 from app.ml.classifier import model_status
+from app.ml.weak_classifier import weak_model_status
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +40,16 @@ async def health_check() -> dict:
 @router.get("/model")
 def classifier_health() -> dict:
     """Describe model provenance and schema without exposing the artifact."""
-    return {**model_status(demo=settings.DEMO_MODE),
+    anomaly = model_status(demo=settings.DEMO_MODE)
+    return {**anomaly, "anomaly_detection": anomaly,
+            "weak_classifier": weak_model_status() if not settings.DEMO_MODE else
+            {"model_loaded": False, "inference_available": False,
+             "note": "Real-FIRMS classifier disabled in synthetic demo mode."},
             "data_mode": "DEMO DATA" if settings.DEMO_MODE else
             "FIRMS SNAPSHOT" if settings.FIRMS_SNAPSHOT_PATH else "LIVE MODE"}
 
 
 @router.get("/database")
 def database_health() -> dict:
-    """Check the live PostgreSQL/PostGIS connection without creating schema."""
-    if settings.DEMO_MODE:
-        return {"status": "demo", "database": "not used", "data_mode": "DEMO DATA"}
-    if settings.FIRMS_SNAPSHOT_PATH:
-        return {"status": "snapshot", "database": "not connected", "database_persisted": False,
-                "data_mode": "FIRMS SNAPSHOT"}
-    with engine.connect() as connection:
-        version = connection.execute(text("SELECT PostGIS_Version()")).scalar_one()
-    return {"status": "ok", "database": "PostgreSQL/PostGIS", "postgis_version": version}
+    from app.db.health import database_status
+    return database_status()

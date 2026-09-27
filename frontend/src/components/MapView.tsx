@@ -45,12 +45,18 @@ function escapeHtml(value: string) {
 
 export default function MapView({ markers, selectedEventId, onMarkerClick, isLoading }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null)
+  const markersGroupRef = useRef<L.LayerGroup | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
 
   // Initialize map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
+
+    const containerEl = containerRef.current as HTMLElement & { _leaflet_id?: number }
+    if (containerEl._leaflet_id) {
+      delete containerEl._leaflet_id
+    }
 
     const map = L.map(containerRef.current, {
       center: [20.5937, 78.9629], // India center
@@ -64,25 +70,31 @@ export default function MapView({ markers, selectedEventId, onMarkerClick, isLoa
       maxZoom: 19,
     }).addTo(map)
 
+    const layerGroup = L.layerGroup().addTo(map)
+    markersGroupRef.current = layerGroup
     mapRef.current = map
     setMapReady(true)
 
     return () => {
-      map.remove()
-      mapRef.current = null
+      setMapReady(false)
+      if (markersGroupRef.current) {
+        markersGroupRef.current.clearLayers()
+        markersGroupRef.current = null
+      }
+      if (mapRef.current) {
+        mapRef.current.stop()
+        mapRef.current.remove()
+        mapRef.current = null
+      }
     }
   }, [])
 
   // Update markers when data changes
   useEffect(() => {
-    if (!mapRef.current || !mapReady) return
+    if (!markersGroupRef.current || !mapReady) return
 
-    // Clear existing markers
-    mapRef.current.eachLayer((layer) => {
-      if (layer instanceof L.Marker) {
-        mapRef.current!.removeLayer(layer)
-      }
-    })
+    // Clear existing markers from the group
+    markersGroupRef.current.clearLayers()
 
     // Add new markers
     markers.forEach((marker) => {
@@ -96,22 +108,28 @@ export default function MapView({ markers, selectedEventId, onMarkerClick, isLoa
         icon, zIndexOffset: selected ? 1000 : 0,
         title: `Event ${marker.event_id}, ${severity} operational risk`,
       })
-        .addTo(mapRef.current!)
+        .addTo(markersGroupRef.current!)
         .bindPopup(`
           <div style="font-family:monospace;font-size:12px;min-width:160px;">
             <div style="font-weight:700;margin-bottom:4px;">Event #${marker.event_id}</div>
-            <div style="color:#8b9eb0;">Status: <span style="color:${RISK_COLORS[severity]};font-weight:700;">${escapeHtml(marker.status)}</span></div>
-            <div style="color:#8b9eb0;">Detections: ${marker.observation_count}</div>
-            <div style="color:#8b9eb0;">Detection frequency: ${marker.persistence_score.toFixed(1)}/active day</div>
-            <div style="color:#8b9eb0;">Risk: ${marker.risk_score?.toFixed(1) ?? 'unknown'}/100 (${severity.toUpperCase()})</div>
-            <div style="color:#8b9eb0;">Trend: ${marker.trend ?? 'unknown'}</div>
-            ${marker.last_detection ? `<div style="color:#5a6878;margin-top:4px;">Last: ${new Date(marker.last_detection).toLocaleDateString()}</div>` : ''}
+            <div>Status: <span style="color:${RISK_COLORS[severity]};font-weight:700;">${escapeHtml(marker.status)}</span></div>
+            <div>Detections: ${marker.observation_count}</div>
+            <div>Detection frequency: ${marker.persistence_score.toFixed(1)}/active day</div>
+            <div>Risk: ${marker.risk_score?.toFixed(1) ?? 'unknown'}/100 (${severity.toUpperCase()})</div>
+            <div>Trend: ${marker.trend ?? 'unknown'}</div>
+            ${marker.last_detection ? `<div style="margin-top:4px;">Last: ${new Date(marker.last_detection).toLocaleDateString()}</div>` : ''}
             <div style="margin-top:8px;">
-              <a href="/events/${marker.event_id}" style="color:#00d9ff;font-size:11px;">View Details →</a>
+              <a href="/events/${marker.event_id}" style="color:var(--accent-primary);font-size:11px;">View Details →</a>
             </div>
           </div>
         `)
         .on('click', () => onMarkerClick(marker.event_id))
+      markerLayer.getElement()?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onMarkerClick(marker.event_id)
+        }
+      })
       void markerLayer
     })
   }, [markers, selectedEventId, mapReady, onMarkerClick])
@@ -127,7 +145,7 @@ export default function MapView({ markers, selectedEventId, onMarkerClick, isLoa
   useEffect(() => {
     if (!mapRef.current || !mapReady || selectedEventId == null) return
     const marker = markers.find((item) => item.event_id === selectedEventId)
-    if (marker) mapRef.current.flyTo([marker.latitude, marker.longitude], Math.max(mapRef.current.getZoom(), 7), { duration: 0.5 })
+    if (marker) mapRef.current.setView([marker.latitude, marker.longitude], Math.max(mapRef.current.getZoom(), 7), { animate: false })
   }, [markers, mapReady, selectedEventId])
 
   return (

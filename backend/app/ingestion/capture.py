@@ -42,6 +42,11 @@ if __name__ == "__main__":
     parser.add_argument("--days", type=int, default=settings.FIRMS_DAYS)
     parser.add_argument("--output", type=Path, default=Path(settings.FIRMS_SNAPSHOT_PATH or "data/firms_latest_raw.csv"))
     args = parser.parse_args()
-    report, captured = capture_firms_to_files(source=args.source, area=args.area, days=args.days, path=args.output)
+    try:
+        report, captured = capture_firms_to_files(source=args.source, area=args.area, days=args.days, path=args.output)
+    except Exception as exc:
+        # Provider exceptions can contain a URL with the map key in its path.
+        print(f"NASA FIRMS capture failed ({type(exc).__name__}); existing capture retained.")
+        raise SystemExit(1)
     print(f"NASA FIRMS capture at {captured.isoformat()}: {report.records_received} received, "
           f"{report.records_accepted} accepted, {report.records_rejected} rejected; saved {args.output}")

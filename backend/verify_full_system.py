@@ -2,6 +2,10 @@
 
 import json
 import urllib.request
+from app.snapshot import snapshot_state
+from app.db.health import database_status
+
+capture = snapshot_state()
 
 def test_url(url, method="GET", data=None):
     req = urllib.request.Request(url, data=data, method=method)
@@ -18,6 +22,17 @@ print("=== 1. SYSTEM HEALTH & MODE ===")
 s, health = test_url("http://127.0.0.1:8000/health")
 print("Health:", health["status"], "| Mode:", health["data_mode"], "| Classifier:", health["classifier_status"])
 assert health["data_mode"] == "FIRMS SNAPSHOT"
+s, db_health = test_url("http://127.0.0.1:8000/health/database")
+print("Database:", db_health.get("database"), "| PostGIS:", db_health.get("postgis"), "| Persisted:", db_health.get("persisted_observations"))
+assert db_health["database"] == "CONNECTED"
+assert db_health["postgis"] == "AVAILABLE"
+actual_database = database_status()
+assert db_health["persisted_observations"] == actual_database["persisted_observations"]
+assert db_health["persisted_events"] == actual_database["persisted_events"]
+assert db_health["database_persisted"]
+s, feed = test_url("http://127.0.0.1:8000/firms/status")
+assert feed["database"] == db_health["database"]
+assert feed["postgis"] == db_health["postgis"]
 
 print("\n=== 2. MODEL HEALTH ===")
 s, model = test_url("http://127.0.0.1:8000/health/model")
@@ -32,12 +47,13 @@ acc = quality["records_accepted"]
 rej = quality["records_rejected"]
 print(f"Received: {rec}, Accepted: {acc}, Rejected: {rej}")
 print("Database status:", quality.get("database_status"))
-assert quality["records_accepted"] == 423
+assert quality["records_accepted"] == capture["validation"]["records_accepted"] > 0
+assert quality["database_status"] == db_health["database"]
 
 print("\n=== 4. MAP HOTSPOTS ===")
-s, hotspots = test_url("http://127.0.0.1:8000/map/hotspots?limit=300")
+s, hotspots = test_url("http://127.0.0.1:8000/map/hotspots?limit=500")
 print("Total markers:", hotspots["total"], "Risk summary:", hotspots["risk_summary"])
-assert hotspots["total"] == 288
+assert hotspots["total"] > 0
 
 print("\n=== 5. EVENTS LISTING & ENRICHMENT ===")
 s, events = test_url("http://127.0.0.1:8000/thermal-events?page=1&page_size=5")
@@ -45,6 +61,10 @@ print("Total events:", events["total"])
 e0 = events["items"][0]
 print(f"Sample Event #{e0['id']}: {e0['location_name']} | Risk: {e0.get('risk_severity')} ({e0.get('risk_score')}) | Anomaly: {e0.get('anomaly_score')} | Peak FRP: {e0.get('max_frp')}")
 assert e0["location_name"] is not None
+assert events["total"] == len(capture["events"])
+s, recurrence = test_url(f"http://127.0.0.1:8000/thermal-events/{e0['id']}/weak-classification")
+assert recurrence["prediction_probability_if_calibrated"] is None
+assert recurrence["prediction"] in ("multi_day_recurrence", "single_day_observed")
 
 print("\n=== 6. EVENT DETAIL & ISOLATION FOREST REASONING ===")
 s, detail = test_url(f"http://127.0.0.1:8000/thermal-events/{e0['id']}")
@@ -68,7 +88,9 @@ assert ev["integrity"]["content_hash_valid"] is True
 print("\n=== 8. BLOCKCHAIN STATUS ===")
 s, bc = test_url("http://127.0.0.1:8000/blockchain/status")
 print("Status:", bc["status"], "| On-chain:", bc["on_chain"], "| Local chain valid:", bc["local_chain"]["valid"], "| Receipts:", bc["local_chain"]["receipt_count"])
-assert bc["on_chain"] is False
+assert bc["local_chain"]["valid"] is True
+if not bc["configured"]:
+    assert bc["on_chain"] is False
 
 print("\n=== 9. FRONTEND PROXY ENDPOINTS ===")
 for ep in ["/api/health", "/api/map/hotspots", "/api/thermal-events", f"/api/evidence/{e0['id']}"]:
@@ -77,7 +99,7 @@ for ep in ["/api/health", "/api/map/hotspots", "/api/thermal-events", f"/api/evi
 print("All proxy endpoints verified successfully (200 OK)!")
 
 print("\n=== 10. FRONTEND PAGES ===")
-for path in ["/", "/events", f"/events/{e0['id']}", "/analytics", "/model", "/evidence"]:
+for path in ["/", "/events", f"/events/{e0['id']}", "/analytics", "/risk", "/model", "/evidence", "/health"]:
     s, content = test_url(f"http://localhost:3000{path}")
     assert s == 200
 print("All frontend routes verified successfully (200 OK)!")

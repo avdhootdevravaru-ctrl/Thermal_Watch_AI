@@ -109,6 +109,25 @@ export interface HealthStatus {
   classifier_status: 'TRAINED_MODEL' | 'UNSUPERVISED_PROTOTYPE' | 'WEAK_LABEL_PROTOTYPE' | 'RULE_BASED_FALLBACK'
 }
 
+export interface FirmsStatus {
+  status: string
+  data_mode: string
+  storage_mode: string
+  is_live: boolean
+  database_persisted: boolean
+  source: string | null
+  capture_timestamp: string | null
+  latest_observation: string | null
+  freshness: 'FRESH' | 'STALE' | 'UNKNOWN' | 'NOT_APPLICABLE'
+  observation_count: number | null
+  event_count: number | null
+  records_received?: number
+  records_rejected?: number
+  duplicates_removed?: number
+  validation_status: string
+  refresh_available: boolean
+}
+
 export interface RiskAssessment {
   score: number
   severity: string
@@ -148,6 +167,30 @@ export interface EventClassification {
   model_version?: string
   methodology?: string
   data_mode?: 'DEMO DATA' | 'FIRMS SNAPSHOT' | 'LIVE MODE'
+}
+
+export interface WeakClassification {
+  event_id: number
+  model_name: string
+  model_version: string
+  model_status: 'WEAKLY_SUPERVISED'
+  target: string
+  prediction: 'multi_day_recurrence' | 'single_day_observed'
+  prediction_probability_if_calibrated: null
+  uncalibrated_model_scores: Record<string, number>
+  anomaly_score_if_available: number | null
+  feature_values: Record<string, number | null>
+  top_contributing_features: Array<{
+    feature: string; value: number; training_median: number
+    model_score_change: number; interpretation: string
+  }>
+  model_provenance: {
+    artifact_hash: string; feature_version: string
+    training_dataset_fingerprint: string; training_capture_hash: string
+    trained_at: string; label_strategy: string; evaluation_role: string
+    random_seed: number
+  }
+  warnings: string[]
 }
 
 export interface EventHistoryPoint {

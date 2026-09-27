@@ -554,3 +554,18 @@
 }
 .evidence-content { padding: 18px; display: grid; gap: 12px; }
 .evidence-content .detail-field-value { overflow-wrap: anywhere; }
+.event-location-map { position: relative; height: 290px; min-height: 290px; border: 1px solid var(--border-default); border-radius: 9px; overflow: hidden; }
+.event-location-map .map-container { height: 100%; }
+.detail-risk-high { color: var(--risk-high); background: var(--bg-tertiary); }
+.detail-risk-medium { color: var(--risk-medium); background: var(--bg-tertiary); }
+.detail-risk-low { color: var(--risk-low); background: var(--bg-tertiary); }
+.weak-classifier-content { display: grid; gap: 14px; }
+.weak-prediction { display: grid; gap: 3px; padding: 14px; border: 1px solid var(--border-default); border-left: 3px solid var(--accent-primary); border-radius: 8px; background: var(--bg-tertiary); }
+.weak-prediction span, .weak-prediction small { color: var(--text-secondary); font-size: 11px; }
+.weak-prediction strong { color: var(--accent-primary); font-size: 17px; }
+.weak-votes, .weak-features, .weak-provenance { display: grid; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.weak-votes { display: flex; flex-wrap: wrap; gap: 8px; }
+.weak-votes span { padding: 7px 9px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-tertiary); }
+.weak-features strong { color: var(--text-primary); }
+.weak-provenance { padding-top: 12px; border-top: 1px solid var(--border-default); }
+.weak-provenance code { overflow-wrap: anywhere; color: var(--text-primary); }

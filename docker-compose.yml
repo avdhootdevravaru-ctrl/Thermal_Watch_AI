@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  thermalwatch-db:
+    image: postgis/postgis:15-3.3
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: thermalwatch
+      POSTGRES_PASSWORD: thermalwatch
+      POSTGRES_DB: thermalwatch
+    volumes:
+      - thermalwatch-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thermalwatch -d thermalwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  thermalwatch-data:

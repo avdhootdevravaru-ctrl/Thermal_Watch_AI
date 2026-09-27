@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -28,6 +29,9 @@ class ValidationReport:
     invalid_timestamps: int = 0
     invalid_brightness: int = 0
     invalid_frp: int = 0
+    invalid_scan: int = 0
+    invalid_track: int = 0
+    invalid_confidence: int = 0
     missing_values: dict[str, int] = field(default_factory=dict)
     rejection_reasons: dict[str, int] = field(default_factory=dict)
     earliest_observation: str | None = None
@@ -38,7 +42,8 @@ class ValidationReport:
 
 
 def _measurement(raw: dict, keys: tuple[str, ...], low: float, high: float) -> tuple[float | None, str | None]:
-    value = next((raw[key] for key in keys if raw.get(key) is not None and str(raw[key]).strip()), None)
+    value = next((raw[key] for key in keys if raw.get(key) is not None
+                  and str(raw[key]).strip().lower() not in {"", "-", "na", "n/a", "null"}), None)
     if value is None:
         return None, None
     try:
@@ -52,6 +57,9 @@ def _measurement(raw: dict, keys: tuple[str, ...], low: float, high: float) -> t
 
 def validate_firms_csv(csv_text: str, *, source: str) -> tuple[list[dict], ValidationReport]:
     """Return normalized observations and a reproducible row-level audit."""
+    source = source.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9_]{1,50}", source):
+        raise ValueError("Invalid FIRMS product source")
     reader = csv.DictReader(io.StringIO(csv_text.lstrip("\ufeff")))
     required_headers = {"latitude", "longitude", "acq_date", "acq_time"}
     if not reader.fieldnames or not required_headers.issubset(reader.fieldnames):
@@ -62,11 +70,9 @@ def validate_firms_csv(csv_text: str, *, source: str) -> tuple[list[dict], Valid
     missing: Counter[str] = Counter()
     seen: set[tuple[float, float, datetime, str]] = set()
     accepted: list[dict] = []
-    source = source.upper()
-
     for raw in reader:
         report.records_received += 1
-        reason = None
+        reason = "MALFORMED_RECORD" if None in raw else None
         lat, lat_error = _measurement(raw, ("latitude",), -90, 90)
         lon, lon_error = _measurement(raw, ("longitude",), -180, 180)
         if lat_error or lon_error or (lat == 0 and lon == 0):
@@ -97,8 +103,24 @@ def validate_firms_csv(csv_text: str, *, source: str) -> tuple[list[dict], Valid
         elif frp is None:
             missing["frp"] += 1
 
-        if not str(raw.get("confidence") or "").strip():
+        for field_name in ("scan", "track"):
+            measurement, measurement_error = _measurement(raw, (field_name,), 0, 20)
+            if measurement is not None and measurement <= 0:
+                measurement_error = "OUT_OF_RANGE"
+            if measurement_error:
+                reason = reason or f"INVALID_{field_name.upper()}"
+                setattr(report, f"invalid_{field_name}", getattr(report, f"invalid_{field_name}") + 1)
+            elif measurement is None:
+                missing[field_name] += 1
+
+        confidence = str(raw.get("confidence") or "").strip().lower()
+        if confidence in {"", "-", "unknown", "na", "n/a", "null"}:
             missing["confidence"] += 1
+        elif confidence not in {"h", "n", "l"}:
+            _, confidence_error = _measurement(raw, ("confidence",), 0, 100)
+            if confidence_error:
+                reason = reason or "INVALID_CONFIDENCE"
+                report.invalid_confidence += 1
 
         if reason is None:
             fingerprint = (round(lat, 4), round(lon, 4), timestamp, source)

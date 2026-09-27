@@ -11,5 +11,33 @@
 .evidence-list a { display: grid; gap: 3px; padding: 10px; color: var(--text-primary); text-decoration: none; background: var(--bg-tertiary); border-radius: 5px; font-size: 12px; }
 .evidence-list a:hover { color: var(--accent-primary); }
 .evidence-list a span { color: var(--text-secondary); font-size: 11px; }
+.health-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.health-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 18px; box-shadow: var(--shadow-sm); }
+.health-card-icon { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--border-default); border-radius: 11px; color: var(--accent-primary); background: var(--bg-tertiary); }
+.health-card h2 { font-size: 14px; }
+.health-card p { margin-top: 3px; font-size: 11px; color: var(--text-secondary); line-height: 1.45; }
+.health-state { font-size: 10px; color: var(--risk-low); text-align: right; letter-spacing: .5px; }
+.health-state-warn { color: var(--risk-medium); }
+.health-loading { color: var(--text-secondary); }
+.intelligence-loading { color: var(--text-secondary); margin-bottom: 12px; }
+.intelligence-chart-card { grid-column: span 2; }
+.intelligence-chart { height: 245px; min-width: 0; }
+.intelligence-flow-card { grid-column: span 2; }
+.evidence-flow { display: flex; flex-wrap: wrap; gap: 8px; }
+.evidence-flow-step { display: flex; align-items: center; gap: 8px; flex: 1 1 135px; min-height: 68px; padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: 10px; }
+.evidence-flow-step span { color: var(--accent-primary); font: 700 11px var(--font-mono); }
+.evidence-flow-step strong { font-size: 11px; line-height: 1.3; }
+.risk-intelligence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.risk-intelligence-row { display: grid; grid-template-columns: 72px 35px 1fr; align-items: center; gap: 10px; }
+.risk-intelligence-row strong { font: 700 16px var(--font-mono); }
+.risk-priority-card { grid-column: 1 / -1; }
+.risk-priority-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-primary); text-decoration: none; padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-tertiary); }
+.risk-priority-link:hover { border-color: var(--accent-primary); }
+.risk-priority-link span:first-child { display: grid; gap: 2px; }
+.risk-priority-link small { color: var(--text-secondary); }
+.weak-model-card { grid-column: span 1; }
 @media (max-width: 1000px) { .intelligence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .intelligence-page { padding: 16px; } .intelligence-grid { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .intelligence-chart-card, .intelligence-flow-card { grid-column: 1; } }
+@media (max-width: 650px) { .risk-intelligence-grid { grid-template-columns: 1fr; } .risk-priority-card { grid-column: 1; } }
+@media (max-width: 750px) { .health-grid { grid-template-columns: 1fr; } .health-card { grid-template-columns: 34px minmax(0, 1fr); } .health-state { grid-column: 2; text-align: left; } }

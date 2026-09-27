@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import joblib
 from sqlalchemy.exc import OperationalError
 
 from app.config import settings
@@ -92,6 +93,10 @@ def test_train_serialize_load_and_predict_test_only(tmp_path, monkeypatch):
     assert result["model_status"] == "TRAINED_MODEL"
     assert result["classification"] in {"industrial_fire", "agricultural_burning"}
     assert abs(sum(result["probabilities"].values()) - 1) < 0.001
+    artifact = joblib.load(artifact_path)
+    artifact["format"] = "incompatible-replacement"
+    joblib.dump(artifact, artifact_path)
+    assert load_model(str(artifact_path)) is None
 
 
 def test_database_failure_is_a_clean_service_response():

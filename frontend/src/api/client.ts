@@ -12,6 +12,8 @@ import type {
   EventHistoryPoint,
   RiskAssessment,
   EventClassification,
+  WeakClassification,
+  FirmsStatus,
   DataQualityReport,
   HistoricalStatistics,
   LocationStatistics,
@@ -68,8 +70,18 @@ export const api = {
     return data
   },
 
+  getDatabaseHealth: async (): Promise<Record<string, unknown>> => {
+    const { data } = await client.get('/health/database')
+    return data
+  },
+
   getIngestionStatus: async (): Promise<Record<string, unknown>> => {
     const { data } = await client.get('/ingestion/status')
+    return data
+  },
+
+  getFirmsStatus: async (): Promise<FirmsStatus> => {
+    const { data } = await client.get<FirmsStatus>('/firms/status')
     return data
   },
 
@@ -85,6 +97,16 @@ export const api = {
 
   anchorLocalEvidence: async (eventId: number): Promise<Record<string, unknown>> => {
     const { data } = await client.post(`/evidence/${eventId}/anchor-local`)
+    return data
+  },
+
+  anchorBlockchainEvidence: async (eventId: number): Promise<Record<string, unknown>> => {
+    const { data } = await client.post(`/evidence/${eventId}/anchor-blockchain`)
+    return data
+  },
+
+  verifyBlockchainEvidence: async (eventId: number): Promise<Record<string, unknown>> => {
+    const { data } = await client.get(`/evidence/${eventId}/verify-blockchain`)
     return data
   },
 
@@ -117,6 +139,16 @@ export const api = {
 
   getEventClassification: async (eventId: number): Promise<EventClassification> => {
     const { data } = await client.get<EventClassification>(`/thermal-events/${eventId}/classification`)
+    return data
+  },
+
+  getWeakClassification: async (eventId: number): Promise<WeakClassification> => {
+    const { data } = await client.get<WeakClassification>(`/thermal-events/${eventId}/weak-classification`)
+    return data
+  },
+
+  classifyEvent: async (eventId: number): Promise<WeakClassification> => {
+    const { data } = await client.post<WeakClassification>('/classification', { event_id: eventId })
     return data
   },
 

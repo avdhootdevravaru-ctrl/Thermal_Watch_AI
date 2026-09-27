@@ -35,7 +35,13 @@ htmlcov/
 *.log
 logs/
 models/*.joblib
+!models/firms_recurrence.joblib
 data/firms_latest_raw.csv
 data/firms_latest_raw.json
 data/firms_latest_clean.jsonl
 data/evidence_local_chain.jsonl
+data/evidence_local_chain.head.json
+data/evidence_blockchain_chain.jsonl
+data/quarantine/
+pgsql/
+pgsql_downloads/

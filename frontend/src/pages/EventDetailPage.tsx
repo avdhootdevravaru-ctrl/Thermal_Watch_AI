@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, MapPin, Activity, Calendar, AlertTriangle, Layers, TrendingUp, TrendingDown, Minus, Zap, Target, Database, ShieldAlert } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts'
 import { api } from '@/api/client'
-import type { ThermalEventDetail, EventHistoryPoint, ThermalProfileResponse } from '@/types'
+import MapView from '@/components/MapView'
+import type { ThermalEventDetail, EventHistoryPoint, ThermalProfileResponse, WeakClassification } from '@/types'
 import { formatTimelineDate, formatObservationDate } from '@/utils/timestampUtils'
 import { classificationLabel, detectionTime, locationLabel, statusLabel } from '@/utils/intelligence'
 import './EventDetailPage.css'
@@ -15,7 +16,10 @@ export default function EventDetailPage() {
   const [history, setHistory] = useState<EventHistoryPoint[]>([])
   const [profile, setProfile] = useState<ThermalProfileResponse | null>(null)
   const [evidence, setEvidence] = useState<Record<string, any> | null>(null)
+  const [weak, setWeak] = useState<WeakClassification | null>(null)
   const [anchoring, setAnchoring] = useState(false)
+  const [anchoringBlockchain, setAnchoringBlockchain] = useState(false)
+  const [anchorError, setAnchorError] = useState<string | null>(null)
   const [nearby, setNearby] = useState<{ facilities: Array<{ name?: string; type?: string; distance_km?: number }>; note?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -23,16 +27,21 @@ export default function EventDetailPage() {
   const eventId = Number(id)
 
   const load = useCallback(async () => {
-    if (!Number.isFinite(eventId)) return
+    if (!Number.isSafeInteger(eventId) || eventId <= 0) {
+      setError('This event ID is invalid. Choose an event from the queue.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      const [detail, hist, prof, context, proof] = await Promise.allSettled([
+      const [detail, hist, prof, context, proof, weakResult] = await Promise.allSettled([
         api.getEvent(eventId),
         api.getEventHistory(eventId),
         api.getEventProfile(eventId),
         api.getNearbyFacilities(eventId),
         api.getEvidencePackage(eventId),
+        api.getWeakClassification(eventId),
       ])
       if (detail.status === 'rejected') throw detail.reason
       setEvent(detail.value)
@@ -40,9 +49,9 @@ export default function EventDetailPage() {
       setProfile(prof.status === 'fulfilled' ? prof.value : null)
       setNearby(context.status === 'fulfilled' ? context.value as typeof nearby : null)
       setEvidence(proof.status === 'fulfilled' ? proof.value : null)
+      setWeak(weakResult.status === 'fulfilled' ? weakResult.value : null)
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to load event'
-      setError(message)
+      setError('This event could not be loaded. It may no longer be in the current capture, or the API is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -93,6 +102,38 @@ export default function EventDetailPage() {
     event.persistence?.average_intensity != null ? `mean brightness ${event.persistence.average_intensity.toFixed(1)} K` : null,
     risk?.score != null ? `${risk.severity.toLowerCase()} operational risk (${risk.score.toFixed(0)}/100)` : null,
   ].filter(Boolean).join(' · ')
+  const eventMarker = [{
+    event_id: event.id, latitude: event.latitude, longitude: event.longitude,
+    status: event.status, observation_count: event.observation_count,
+    persistence_score: event.persistence_score, trend: event.persistence?.trend ?? null,
+    risk_score: risk?.score ?? null, risk_severity: risk?.severity?.toLowerCase() ?? null,
+    last_detection: event.end_time,
+  }]
+  const anchorEvidence = async () => {
+    setAnchoring(true)
+    setAnchorError(null)
+    try {
+      await api.anchorLocalEvidence(eventId)
+      setEvidence(await api.getEvidencePackage(eventId))
+    } catch {
+      setAnchorError('Could not write the local receipt. The evidence package remains available for inspection.')
+    } finally {
+      setAnchoring(false)
+    }
+  }
+
+  const anchorOnBlockchain = async () => {
+    setAnchoringBlockchain(true)
+    setAnchorError(null)
+    try {
+      await api.anchorBlockchainEvidence(eventId)
+      setEvidence(await api.getEvidencePackage(eventId))
+    } catch {
+      setAnchorError('Blockchain anchoring failed. Check testnet RPC connection and account balance.')
+    } finally {
+      setAnchoringBlockchain(false)
+    }
+  }
 
   return (
     <div className="event-detail">
@@ -109,6 +150,7 @@ export default function EventDetailPage() {
         <div className={`status-pill-large status-${event.status.toLowerCase()}`}>
           {event.status}
         </div>
+        {event.risk?.severity && <div className={`status-pill-large detail-risk-${event.risk.severity.toLowerCase()}`}>{event.risk.severity.toUpperCase()} RISK · {event.risk.score?.toFixed(0) ?? 'N/A'}/100</div>}
       </div>
 
       {event.observations.some((observation) => observation.source === 'DEMO_SYNTHETIC') && (
@@ -121,7 +163,13 @@ export default function EventDetailPage() {
       <div className="event-detail-body">
         <section className="detail-panel detail-panel-wide investigation-summary">
           <header className="detail-panel-header"><ShieldAlert size={14} /><h3>Why this event matters</h3></header>
-          <p>{why}. These measurements identify a thermal anomaly; they do not confirm a fire or its cause.</p>
+          <p>{why}. These measurements identify a thermal event; they do not confirm a fire or its cause.</p>
+        </section>
+
+        <section className="detail-panel detail-panel-wide event-location-panel">
+          <header className="detail-panel-header"><MapPin size={14} /><h3>Location & surrounding map</h3><span className="methodology-badge">{event.latitude.toFixed(4)}° N · {event.longitude.toFixed(4)}° E</span></header>
+          <div className="event-location-map"><MapView markers={eventMarker} selectedEventId={event.id} onMarkerClick={() => {}} /></div>
+          <p className="context-message">Marker location is the centroid of the observed thermal event. OpenStreetMap provides geographic context; proximity does not establish cause.</p>
         </section>
 
         <section className="detail-panel detail-panel-wide">
@@ -142,6 +190,18 @@ export default function EventDetailPage() {
           </div> : <p className="panel-empty">Classification unavailable.</p>}
         </section>
 
+        <section className="detail-panel detail-panel-wide weak-classifier-panel">
+          <header className="detail-panel-header"><Activity size={14} /><h3>Weakly supervised recurrence classifier</h3><span className="methodology-badge">SEPARATE FROM ANOMALY &amp; RISK</span></header>
+          {weak ? <div className="weak-classifier-content">
+            <div className="weak-prediction"><span>Model output</span><strong>{weak.prediction === 'multi_day_recurrence' ? 'Later-day re-detection pattern' : 'Single-day observed pattern'}</strong><small>{weak.model_name} · {weak.model_version}</small></div>
+            <p className="classification-caveat">Target: {weak.target}. This model uses only first-day observations. Its class scores are uncalibrated and do not estimate fire probability.</p>
+            <div className="weak-votes">{Object.entries(weak.uncalibrated_model_scores).map(([label, score]) => <span key={label}>{label.replace(/_/g, ' ')}: {(score * 100).toFixed(1)}% model score</span>)}</div>
+            <div className="weak-features"><strong>Features contributing to this model output</strong>{weak.top_contributing_features.map((item) => <span key={item.feature}>{item.feature.replace(/_/g, ' ')}: {item.value.toFixed(2)} · score change {item.model_score_change >= 0 ? '+' : ''}{item.model_score_change.toFixed(3)} versus training median</span>)}</div>
+            <div className="weak-provenance"><span>Artifact SHA-256: <code>{weak.model_provenance.artifact_hash}</code></span><span>Feature schema: {weak.model_provenance.feature_version}</span><span>Dataset fingerprint: <code>{weak.model_provenance.training_dataset_fingerprint}</code></span><span>Evaluation role: {weak.model_provenance.evaluation_role.replace(/_/g, ' ')}</span><span>Trained: {new Date(weak.model_provenance.trained_at).toLocaleString()}</span></div>
+            {weak.warnings.map((warning) => <p className="classification-caveat" key={warning}>{warning}</p>)}
+          </div> : <p className="panel-empty">A compatible real-FIRMS classifier is unavailable. Anomaly detection and rule-based risk remain independent.</p>}
+        </section>
+
         <section className="detail-panel detail-panel-wide evidence-panel">
           <header className="detail-panel-header"><ShieldAlert size={14} /><h3>Evidence & integrity</h3></header>
           {evidence ? <div className="evidence-content">
@@ -149,8 +209,46 @@ export default function EventDetailPage() {
             <Field label="SHA-256" value={String(evidence.sha256)} mono />
             <Field label="Current content" value={evidence.integrity?.content_hash_valid ? 'Hash verified' : 'Verification failed'} />
             <Field label="Local receipt" value={evidence.integrity?.local_anchor_valid ? 'Verified local receipt' : 'Not anchored locally'} />
-            <Field label="Blockchain" value="Not configured · no on-chain claim" />
-            <button className="primary-action" disabled={anchoring} onClick={() => { setAnchoring(true); void api.anchorLocalEvidence(eventId).then(() => api.getEvidencePackage(eventId)).then(setEvidence).finally(() => setAnchoring(false)) }}>{anchoring ? 'Saving receipt…' : 'Anchor in local audit chain'}</button>
+            <Field label="Blockchain" value={
+              evidence.integrity?.on_chain
+                ? `Verified on-chain · ${String(evidence.integrity.blockchain?.network ?? 'testnet').toUpperCase()} (Block #${evidence.integrity.blockchain?.block_number})`
+                : evidence.integrity?.blockchain?.status === 'CONNECTED'
+                ? 'Ready to anchor on EVM testnet'
+                : 'Blockchain unavailable — local evidence verification active'
+            } />
+            {evidence.integrity?.on_chain && evidence.integrity?.blockchain?.tx_hash && (
+              <div className="field-group">
+                <span className="field-label">Testnet Tx</span>
+                <a
+                  href={evidence.integrity.blockchain.explorer_link ?? `https://sepolia.etherscan.io/tx/${evidence.integrity.blockchain.tx_hash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--accent-primary)', textDecoration: 'underline', fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all' }}
+                >
+                  {String(evidence.integrity.blockchain.tx_hash)} ↗
+                </a>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+              {!evidence.integrity?.local_anchor_valid && (
+                <button className="primary-action" disabled={anchoring} onClick={() => void anchorEvidence()}>
+                  {anchoring ? 'Saving local receipt…' : 'Anchor in local audit chain'}
+                </button>
+              )}
+              {evidence.integrity?.blockchain?.status === 'CONNECTED' && !evidence.integrity?.on_chain && (
+                <button className="primary-action" disabled={anchoringBlockchain} onClick={() => void anchorOnBlockchain()}>
+                  {anchoringBlockchain ? 'Submitting to testnet…' : 'Anchor on EVM Testnet'}
+                </button>
+              )}
+            </div>
+            {anchorError && <p className="command-error" role="status">{anchorError}</p>}
+            {evidence.integrity?.local_receipt && <details className="raw-evidence"><summary>Inspect linked receipt</summary>
+              <Field label="Chain index" value={String(evidence.integrity.local_receipt.sequence)} />
+              <Field label="Previous receipt SHA-256" value={String(evidence.integrity.local_receipt.previous_sha256)} mono />
+              <Field label="Current receipt SHA-256" value={String(evidence.integrity.local_receipt.chain_sha256)} mono />
+              <p>Local verification detects edits and truncation against the saved checkpoint. It is not an independent public timestamp.</p>
+            </details>}
+            <details className="raw-evidence"><summary>Inspect hashed evidence payload</summary><pre style={{ overflow: 'auto', maxHeight: 320 }}>{JSON.stringify(evidence.payload, null, 2)}</pre></details>
           </div> : <p className="panel-empty">Evidence package unavailable for this event.</p>}
         </section>
 
@@ -182,7 +280,7 @@ export default function EventDetailPage() {
             <Field label="Avg Intensity" value={event.persistence?.average_intensity != null ? `${event.persistence.average_intensity.toFixed(1)} K` : '—'} mono />
             <Field label="Peak FRP" value={event.max_frp != null ? `${event.max_frp.toFixed(1)} MW` : '—'} mono />
             <Field label="Mean FRP" value={event.mean_frp != null ? `${event.mean_frp.toFixed(1)} MW` : '—'} mono />
-            <Field label="VIIRS Confidence" value={event.confidence_category ? `${event.confidence_category} category` : event.average_confidence != null ? `${event.average_confidence.toFixed(0)}%` : 'nominal'} mono />
+            <Field label="VIIRS Confidence" value={event.confidence_category ? `${event.confidence_category} category` : event.average_confidence != null ? `${event.average_confidence.toFixed(0)}%` : 'Unavailable'} mono />
             <Field label="Active Days" value={event.persistence?.active_days != null ? String(event.persistence.active_days) : 'Unavailable'} mono />
             <Field label="Persistence Score" value={event.persistence?.persistence_score?.toFixed(2) ?? '—'} mono />
             <Field label="Intensity Variance" value={event.persistence?.intensity_variance != null ? `${event.persistence.intensity_variance.toFixed(2)}` : '—'} mono />
@@ -338,7 +436,7 @@ export default function EventDetailPage() {
                   {o.satellite ? `${o.satellite} (${o.instrument ?? 'VIIRS'})` : o.source}
                 </span>
                 <span className="obs-source">
-                  {o.confidence_category ? `VIIRS ${o.confidence_category}` : o.confidence != null ? `${o.confidence.toFixed(0)}% conf` : 'nominal'}
+                  {o.confidence_category ? `VIIRS ${o.confidence_category}` : o.confidence != null ? `${o.confidence.toFixed(0)}% conf` : 'Confidence unavailable'}
                   {o.daynight ? ` · ${o.daynight === 'D' ? 'Day' : 'Night'}` : ''}
                 </span>
               </div>

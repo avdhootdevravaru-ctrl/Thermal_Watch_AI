@@ -131,11 +131,20 @@ def feature_vector(features: dict[str, float | None]) -> list[float]:
     return [features[name] if features[name] is not None else float("nan") for name in FEATURE_NAMES]
 
 
-@lru_cache(maxsize=4)
 def load_model(path: str) -> dict | None:
     """Only load a trusted local joblib artifact; never accept model uploads."""
-    if not path or not Path(path).is_file():
+    if not path:
         return None
+    location = Path(path)
+    if not location.is_file():
+        return None
+    stat = location.stat()
+    return _load_model_cached(str(location.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=4)
+def _load_model_cached(path: str, mtime_ns: int, size: int) -> dict | None:
+    del mtime_ns, size
     try:
         artifact = joblib.load(path)
         if artifact.get("format") != MODEL_FORMAT or tuple(artifact.get("feature_names", ())) != FEATURE_NAMES:

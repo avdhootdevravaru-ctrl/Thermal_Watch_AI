@@ -1,6 +1,4 @@
-/* ThermalWatch AI — Geospatial Intelligence Design System
- * Dark-mode tactical aesthetic. Inspired by satellite operations centers.
- */
+/* IGNIS thermal intelligence design tokens. */
 
 :root {
   /* Color palette */
@@ -62,6 +60,32 @@
   --transition-base: 200ms ease;
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg-primary: #f4f7f9;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #edf3f6;
+  --bg-elevated: #e4eef2;
+  --bg-overlay: rgba(255, 255, 255, .94);
+  --border-subtle: rgba(26, 68, 83, .12);
+  --border-default: rgba(26, 68, 83, .21);
+  --border-strong: rgba(26, 68, 83, .34);
+  --text-primary: #172e3d;
+  --text-secondary: #4c6573;
+  --text-tertiary: #647d89;
+  --text-inverse: #ffffff;
+  --risk-high: #c52f2a;
+  --risk-medium: #a75d08;
+  --risk-low: #187b52;
+  --risk-unknown: #526b78;
+  --accent-primary: #087e91;
+  --accent-secondary: #315caa;
+  --accent-glow: rgba(8, 126, 145, .18);
+  --shadow-sm: 0 1px 3px rgba(26, 68, 83, .08);
+  --shadow-md: 0 6px 18px rgba(26, 68, 83, .1);
+  --shadow-lg: 0 12px 32px rgba(26, 68, 83, .13);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -77,6 +101,14 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, .layout, .topbar, .card-surface, .command-kpi, .detail-panel, .priority-card, .topnav-link {
+  transition: background-color var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 #root {
@@ -115,9 +147,14 @@ html, body {
 
 /* Leaflet overrides for dark theme */
 .leaflet-container {
-  background: #0a0e14 !important;
+  background: var(--bg-primary) !important;
   font-family: var(--font-sans) !important;
 }
+
+:root[data-theme='light'] .command-notice, :root[data-theme='light'] .banner { color: #805011; }
+:root[data-theme='light'] .command-error, :root[data-theme='light'] .banner-error { color: #a42e28; }
+:root[data-theme='light'] .command-legend { background: var(--bg-overlay); }
+:root[data-theme='light'] .anomaly-tag.outlier { color: var(--risk-high); }
 .leaflet-control-attribution {
   background: var(--bg-overlay) !important;
   color: var(--text-tertiary) !important;

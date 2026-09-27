@@ -69,8 +69,19 @@ def test_demo_health_exposes_database_and_model_mode(monkeypatch):
     app.include_router(health_router)
     client = TestClient(app)
     assert client.get("/health").json()["classifier_status"] == "RULE_BASED_FALLBACK"
-    assert client.get("/health/database").json() == {
-        "status": "demo", "database": "not used", "data_mode": "DEMO DATA"}
+    database = client.get("/health/database").json()
+    expected = {
+        "status": "demo",
+        "database": "not used",
+        "data_mode": "DEMO DATA",
+        "database_persisted": False,
+        "postgis": "UNAVAILABLE",
+        "persisted_observations": 0,
+        "persisted_events": 0,
+    }
+    assert {key: database[key] for key in expected} == expected
+    assert database["serving_from"] == "SYNTHETIC"
+    assert database["checked_at"]
 
 
 def test_weak_label_demo_model_is_explicit_and_never_used_live(tmp_path, monkeypatch):

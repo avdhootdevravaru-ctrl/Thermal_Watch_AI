@@ -22,6 +22,8 @@ from app.routers import (
     history_router,
 )
 from app.utils.logging import setup_logging
+from app.api.classification import router as weak_classification_router
+from app.api.firms_status import router as firms_status_router
 
 # --- Logging setup ---
 setup_logging()
@@ -45,10 +47,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ThermalWatch AI API",
+    title="IGNIS / ThermalWatch AI API",
     description=(
-        "AI-Based Detection and Classification of Industrial Fires and "
-        "Persistent Thermal Sources Using NASA FIRMS, OSM & Satellite Data.\n\n"
+        "Explainable thermal event intelligence from NASA FIRMS observations. "
+        "Anomaly detection, weakly supervised recurrence classification, and "
+        "rule-based risk are distinct outputs; none establishes fire cause.\n\n"
         "SIH 2026 Problem Statement: SIH26162\n"
         "Sponsor: National Technical Research Organisation (NTRO)"
     ),
@@ -68,17 +71,18 @@ async def database_unavailable(_request, exc: OperationalError):
         content={"detail": "Database unavailable. Start PostgreSQL/PostGIS or enable explicit demo mode."},
     )
 
-# --- CORS (adjust for production) ---
+# --- CORS origins are configured explicitly for the local dashboard. ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, set specific origins
-    allow_credentials=True,
+    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- Routers ---
 app.include_router(health_router)
+app.include_router(firms_status_router)
 if settings.DEMO_MODE or settings.FIRMS_SNAPSHOT_PATH:
     from app.demo import router as demo_router
     app.include_router(demo_router)
@@ -87,6 +91,7 @@ else:
     app.include_router(events_router)
     app.include_router(map_router)
     app.include_router(history_router)
+app.include_router(weak_classification_router)
 
 
 # --- Root endpoint ---
@@ -95,7 +100,7 @@ async def root() -> dict:
     return {
         "service": "ThermalWatch AI",
         "version": "0.1.0",
-        "description": "Geospatial intelligence for industrial fire detection",
+        "description": "Geospatial intelligence for satellite thermal events",
         "docs": "/docs",
         "health": "/health",
         "data_mode": "DEMO DATA" if settings.DEMO_MODE else

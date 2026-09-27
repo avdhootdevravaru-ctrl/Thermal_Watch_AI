@@ -44,7 +44,7 @@ def snapshot_state() -> dict:
     )
     from app.processing.geo_context import resolve_location_name
 
-    now = datetime.now(timezone.utc)
+    now = max((r["timestamp"] for r in accepted), default=datetime.now(timezone.utc))
     for cluster in clusters:
         members = [accepted[index] for index in cluster["observation_indices"]]
         members.sort(key=lambda row: row["timestamp"])

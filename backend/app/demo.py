@@ -22,6 +22,7 @@ from app.ml.classifier import classify_with_fallback
 from app.processing.thermal_profile import compute_thermal_profile
 from app.processing.clustering import cluster_observations
 from app.config import settings
+from app.db.health import database_status
 from app.schemas.event import ThermalEventDetail, ThermalEventList
 from app.schemas.map import MapHotspotsResponse
 from app.schemas.ingestion import IngestionResult, IngestionRunRequest
@@ -298,10 +299,63 @@ def local_anchor_evidence(event_id: int):
 
 @router.get("/blockchain/status", tags=["evidence"])
 def local_blockchain_status():
+    from app.blockchain import get_blockchain_status
     from app.evidence import verify_chain
 
-    return {"configured": False, "on_chain": False, "provider": None,
-            "status": "NOT_CONFIGURED", "local_chain": verify_chain()}
+    status = get_blockchain_status()
+    return {**status, "on_chain": bool(status.get("connected") and (status.get("total_on_chain") or 0) > 0), "local_chain": verify_chain()}
+
+
+@router.post("/evidence/{event_id}/anchor-blockchain", tags=["evidence"])
+def anchor_event_on_blockchain(event_id: int):
+    from app.evidence import evidence_package, anchor_blockchain
+
+    package = evidence_package(_event(event_id))
+    try:
+        return anchor_blockchain(package)
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail="Blockchain RPC unavailable; local evidence remains usable.")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error("Failed to anchor on blockchain (%s)", type(e).__name__)
+        raise HTTPException(status_code=500, detail="On-chain anchoring failed. Check backend configuration and transaction status.")
+
+
+@router.post("/blockchain/anchor/{event_id}", tags=["evidence"])
+def anchor_event_blockchain_direct(event_id: int):
+    """Direct route for blockchain anchoring."""
+    from app.evidence import evidence_package, anchor_blockchain
+
+    package = evidence_package(_event(event_id))
+    try:
+        return anchor_blockchain(package)
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail="Blockchain RPC unavailable; local evidence remains usable.")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error("Failed to anchor on blockchain (%s)", type(e).__name__)
+        raise HTTPException(status_code=500, detail="On-chain anchoring failed. Check backend configuration and transaction status.")
+
+
+@router.get("/evidence/{event_id}/verify-blockchain", tags=["evidence"])
+def verify_event_on_blockchain(event_id: int):
+    from app.evidence import evidence_package
+    from app.blockchain import verify_evidence_on_chain
+
+    package = evidence_package(_event(event_id))
+    return verify_evidence_on_chain(package["sha256"])
+
+
+@router.get("/blockchain/verify/{evidence_hash}", tags=["evidence"])
+def verify_hash_blockchain_direct(evidence_hash: str):
+    """Direct route to verify evidence hash on blockchain."""
+    from app.blockchain import verify_evidence_on_chain
+    try:
+        return verify_evidence_on_chain(evidence_hash)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 def _filtered_observations(start_date: datetime | None, end_date: datetime | None):
@@ -354,7 +408,7 @@ def demo_quality(start_date: datetime | None = None, end_date: datetime | None =
             "missing_values": report.get("missing_values", {}),
             "rejection_reasons": report.get("rejection_reasons", {}),
             "capture_time": capture_time,
-            "database_status": "NOT_PERSISTED" if _snapshot_mode() else "NOT_USED"}
+            "database_status": database_status()["database"] if _snapshot_mode() else "NOT_USED"}
 
 
 def _nearby(lat: float, lon: float, radius_km: float):
@@ -454,4 +508,4 @@ def local_ingestion_status():
     state = snapshot_state()
     return {"data_mode": _mode(), "status": "CAPTURED", "source": state["source"],
             "area": state["area"], "captured_at": state["capture_time"],
-            "database_persisted": False, **state["validation"]}
+            "database_persisted": database_status()["database_persisted"], **state["validation"]}
