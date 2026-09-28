@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, NavLink, Link } from 'react-router-dom'
-import { Activity, Map, AlertTriangle, BarChart3, BrainCircuit, Fingerprint, HeartPulse, Moon, Sun, ShieldAlert } from 'lucide-react'
+import { Map, AlertTriangle, BarChart3, BrainCircuit, Fingerprint, HeartPulse, Moon, Sun, ShieldAlert } from 'lucide-react'
 import { api } from '@/api/client'
 import './Layout.css'
 
@@ -38,10 +38,10 @@ export default function Layout() {
         <div className="topbar-left">
           <Link to="/" className="brand">
             <div className="brand-mark">
-              <Activity size={20} strokeWidth={2.5} />
+              <img src="/thermal-watch-logo.png" alt="" />
             </div>
             <div className="brand-text">
-              <div className="brand-name">IGN<span className="brand-accent">IS</span></div>
+              <div className="brand-name">THERMAL WATCH<span className="brand-accent">.AI</span></div>
               <div className="brand-tag">THERMAL INTELLIGENCE &amp; RISK MONITORING</div>
             </div>
           </Link>

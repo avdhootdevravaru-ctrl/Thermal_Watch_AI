@@ -12,6 +12,7 @@ from app.db.models import ThermalObservation, ThermalEvent, ThermalProfile, Risk
 from app.snapshot import snapshot_state
 from app.processing.persistence import compute_persistence_score
 from app.processing.risk import classify_event, compute_risk_score
+from app.geo.india import india_sql_contains
 
 
 def observation_key(row):
@@ -25,6 +26,21 @@ def persist_snapshot():
     claimed_event_ids = set()
     with Session(_get_engine()) as session, session.begin():
         session.execute(text("SELECT pg_advisory_xact_lock(26162)"))
+        # Remove legacy rows outside the polygon before deriving current event
+        # state. Fresh observations have already passed the same polygon in the
+        # shared FIRMS validator.
+        outside_event_ids = list(session.scalars(select(ThermalEvent.id).where(
+            ~india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude)
+        )))
+        if outside_event_ids:
+            session.execute(delete(ThermalProfile).where(ThermalProfile.event_id.in_(outside_event_ids)))
+            session.execute(delete(RiskAssessment).where(RiskAssessment.event_id.in_(outside_event_ids)))
+            session.execute(delete(Prediction).where(Prediction.event_id.in_(outside_event_ids)))
+            session.execute(delete(ThermalObservation).where(ThermalObservation.event_id.in_(outside_event_ids)))
+            session.execute(delete(ThermalEvent).where(ThermalEvent.id.in_(outside_event_ids)))
+        session.execute(delete(ThermalObservation).where(
+            ~india_sql_contains(ThermalObservation.latitude, ThermalObservation.longitude)
+        ))
         existing = {observation_key(row): row for row in session.scalars(select(ThermalObservation))}
         for event in state["events"].values():
             members = event["observations"]

@@ -43,7 +43,7 @@ export default function IntelligencePage({ section }: { section: Section }) {
   const weak = model?.weak_classifier as Record<string, unknown> | undefined
   const evaluation = weak?.evaluation_metrics as Record<string, unknown> | undefined
   return <div className="intelligence-page">
-    <div className="command-eyebrow">IGNIS · {section.toUpperCase()}</div>
+    <div className="command-eyebrow">THERMAL WATCH.AI · {section.toUpperCase()}</div>
     <h1>{title}</h1>
     <p className="intelligence-intro">{section === 'analytics' ? 'Validated satellite observations, event formation, and activity across the saved FIRMS capture.' : section === 'model' ? 'What the current model uses and what its outputs can establish.' : 'Reproducible event hashes, local audit receipts, and current blockchain status.'}</p>
     {error && <div className="command-error">The backend is unavailable. Start the API and refresh this page.</div>}

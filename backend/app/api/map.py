@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import get_db
 from app.db.models import ThermalEvent, Facility, RiskAssessment
+from app.geo.india import india_sql_contains
 from app.schemas.map import MapHotspotsResponse, HotspotMarker, NearbyFacilitiesResponse, FacilityMarker
 
 logger = logging.getLogger(__name__)
@@ -34,12 +35,9 @@ async def get_map_hotspots(
     # Start with a base query that joins ThermalEvent with RiskAssessment if available
     events_query = db.query(ThermalEvent)
 
-    # Always filter to India geographic bounds (safety net for legacy data)
+    # PostGIS polygon safety net for any legacy rows.
     events_query = events_query.filter(
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude)
     )
 
     events = events_query.limit(limit).all()

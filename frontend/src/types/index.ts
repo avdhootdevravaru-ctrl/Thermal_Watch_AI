@@ -222,6 +222,8 @@ export interface DataQualityReport {
   observations_by_region: Record<string, number>
   duplicate_count: number
   invalid_coordinates: number
+  outside_india?: number
+  geographic_filter?: string
   confidence_distribution: Record<string, number>
   events_by_date: Record<string, number>
   orphan_events: number

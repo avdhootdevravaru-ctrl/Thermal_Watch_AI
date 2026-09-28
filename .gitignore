@@ -1,3 +1,5 @@
 backend/*.err
 backend/*.out
 .env
+/tmp/
+/output/

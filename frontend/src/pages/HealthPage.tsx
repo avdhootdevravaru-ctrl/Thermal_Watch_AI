@@ -57,7 +57,7 @@ export default function HealthPage() {
   ]
 
   return <div className="intelligence-page">
-    <div className="command-eyebrow">IGNIS · OPERATIONS</div>
+    <div className="command-eyebrow">THERMAL WATCH.AI · OPERATIONS</div>
     <h1>System health</h1>
     <p className="intelligence-intro">Connection checks update every 30 seconds. Captured data, local evidence, database persistence, and blockchain each retain their own provenance.</p>
     {loading ? <p className="health-loading">Checking data pipeline…</p> : <div className="health-grid">

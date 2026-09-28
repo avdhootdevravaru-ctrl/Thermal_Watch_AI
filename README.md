@@ -1,9 +1,9 @@
-# IGNIS / ThermalWatch AI
+# THERMAL WATCH.AI
 
 **SIH 2026 Problem Statement:** SIH26162
 **Sponsor:** National Technical Research Organisation (NTRO)
 
-**IGNIS** is a thermal event investigation prototype. It validates NASA FIRMS VIIRS observations, groups nearby detections into spatial and temporal events, extracts a Thermal DNA feature signature, and presents separate anomaly, rule-based risk, and weak recurrence signals with SHA-256 evidence. 
+**THERMAL WATCH.AI** is a thermal event investigation prototype. It validates NASA FIRMS VIIRS observations, groups nearby detections into spatial and temporal events, extracts a Thermal DNA feature signature, and presents separate anomaly, rule-based risk, and weak recurrence signals with SHA-256 evidence.
 
 ## Architecture
 
@@ -67,6 +67,9 @@ cd frontend
 npm run dev
 ```
 
+Open `http://localhost:3000`. The API documentation is at
+`http://127.0.0.1:8000/docs`.
+
 ### Running with PostgreSQL + PostGIS
 1. Keep `FIRMS_SNAPSHOT_PATH=data/firms_latest_raw.csv` to serve the latest
    validated capture while exposing database persistence health independently.
@@ -105,6 +108,11 @@ npm run dev
    .\.venv\Scripts\python.exe -m app.ingestion.capture
    ```
 3. **Use Saved Captures:** Ensure `FIRMS_SNAPSHOT_PATH` points to the saved capture CSV.
+
+Every capture is filtered before clustering, ML inference, risk scoring,
+persistence, maps, and reports using the bundled Natural Earth 1:10m India
+administrative polygon. Valid coordinates in neighbouring countries are logged
+as `OUTSIDE_INDIA` and excluded from all downstream outputs.
 
 ## PostgreSQL + PostGIS Setup
 
@@ -173,6 +181,7 @@ The fixed seed geographic holdout is a research check, not external validation.
 - `POST /ingestion/firms/run` : Trigger FIRMS data ingestion
 - `GET /thermal-events` : List detected thermal events
 - `GET /thermal-events/{id}` : Get a single thermal event detail
+- `GET /thermal-events/{id}/report.pdf` : Download the selected event's complete PDF report
 - `GET /history/event/{event_id}/profile` : Get Thermal DNA profile
 - `GET /evidence/{event_id}/verify` : Verify data receipt hashes
 

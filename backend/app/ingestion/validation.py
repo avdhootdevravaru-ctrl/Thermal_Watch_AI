@@ -17,6 +17,7 @@ from datetime import datetime
 
 from app.ingestion.firms_client import FirmsClient
 from app.ingestion.normalizer import normalize_observation
+from app.geo.india import is_in_india
 
 
 @dataclass
@@ -26,6 +27,7 @@ class ValidationReport:
     records_rejected: int = 0
     duplicates_removed: int = 0
     invalid_coordinates: int = 0
+    outside_india: int = 0
     invalid_timestamps: int = 0
     invalid_brightness: int = 0
     invalid_frp: int = 0
@@ -81,6 +83,9 @@ def validate_firms_csv(csv_text: str, *, source: str) -> tuple[list[dict], Valid
         elif lat is None or lon is None:
             reason = "MISSING_COORDINATES"
             missing["coordinates"] += 1
+        elif not is_in_india(lat, lon):
+            reason = "OUTSIDE_INDIA"
+            report.outside_india += 1
 
         timestamp = FirmsClient._firm_date_time(raw.get("acq_date", ""), raw.get("acq_time", ""))
         if timestamp is None:

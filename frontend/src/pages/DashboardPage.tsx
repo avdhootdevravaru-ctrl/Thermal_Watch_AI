@@ -180,7 +180,7 @@ export default function DashboardPage() {
       {demo && <div className="command-notice"><strong>Demonstration scenario.</strong> All displayed observations and locations are synthetic. Classification is an unvalidated prototype; no fire is confirmed.</div>}
       {snapshot && (
         <div className="command-notice">
-          <strong>REAL NASA FIRMS CAPTURE (INDIA QUERY AREA)</strong> · {quality?.records_accepted ?? 'N/A'} validated VIIRS observations ({quality?.records_rejected ?? 'N/A'} rejected, {quality?.duplicate_count ?? 'N/A'} duplicates) forming {totalEvents ?? 'N/A'} spatial-temporal event clusters. {events.length ? persistentCount : 'N/A'} persistent thermal sources detected. Mode: local capture. Satellite thermal detections do not confirm fire causes; the rectangular query area can include neighboring countries.
+          <strong>REAL NASA FIRMS CAPTURE · INDIA-ONLY FILTER ACTIVE</strong> · {quality?.records_accepted ?? 'N/A'} validated VIIRS observations ({quality?.records_rejected ?? 'N/A'} rejected, {quality?.duplicate_count ?? 'N/A'} duplicates) forming {totalEvents ?? 'N/A'} spatial-temporal event clusters. {events.length ? persistentCount : 'N/A'} persistent thermal sources detected. Mode: local capture. Satellite thermal detections do not confirm fire causes.
         </div>
       )}
       {errors.length > 0 && <div className="command-error" role="status">{errors.join(', ')} unavailable. Available sections remain usable. Check backend and database status.</div>}
@@ -199,7 +199,7 @@ export default function DashboardPage() {
       <div className="command-main">
         <section className="command-map card-surface" aria-label="India-area thermal event map">
           <div className="surface-heading">
-            <div><span className="section-kicker">GEOSPATIAL DISTRIBUTION</span><h2>India-Area Thermal Events Map</h2></div>
+            <div><span className="section-kicker">GEOSPATIAL DISTRIBUTION · INDIA-ONLY FILTER ACTIVE</span><h2>India Thermal Events Map</h2></div>
             <span className="surface-subtle">{markers.length} mapped event clusters</span>
           </div>
           <div className="command-map-body">
@@ -311,7 +311,7 @@ export default function DashboardPage() {
             <div><dt>Accepted / received</dt><dd>{quality?.records_received != null ? `${quality.records_accepted} / ${quality.records_received}` : 'Unavailable'}</dd></div>
             <div><dt>Historical baseline</dt><dd>{demo || snapshot ? 'Insufficient history' : statusLabel(statistics?.status)}</dd></div>
           </dl>
-          <p className="health-note">{demo ? 'Demo measurements are generated locally and do not represent NASA FIRMS observations.' : snapshot ? `Dashboard reads a validated local FIRMS capture. PostgreSQL: ${String(databaseStatus?.database ?? 'UNKNOWN').replace(/_/g, ' ')}; PostGIS: ${String(databaseStatus?.postgis ?? 'UNKNOWN')}. ${String(databaseStatus?.persisted_observations ?? 'Unknown')} observations stored. The query can include neighboring countries.` : 'Live status depends on PostgreSQL/PostGIS and the configured FIRMS source.'}</p>
+          <p className="health-note">{demo ? 'Demo measurements are generated locally and do not represent NASA FIRMS observations.' : snapshot ? `Dashboard reads a validated local FIRMS capture after Natural Earth India polygon filtering. PostgreSQL: ${String(databaseStatus?.database ?? 'UNKNOWN').replace(/_/g, ' ')}; PostGIS: ${String(databaseStatus?.postgis ?? 'UNKNOWN')}. ${String(databaseStatus?.persisted_observations ?? 'Unknown')} observations stored.` : 'Live status depends on PostgreSQL/PostGIS and the configured FIRMS source. India polygon filtering is applied before storage and clustering.'}</p>
         </section>
       </div>
     </div>

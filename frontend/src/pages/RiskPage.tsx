@@ -28,7 +28,7 @@ export default function RiskPage() {
   }, [])
 
   return <div className="intelligence-page">
-    <div className="command-eyebrow"><ShieldAlert size={14} /> IGNIS · RISK INTELLIGENCE</div>
+    <div className="command-eyebrow"><ShieldAlert size={14} /> THERMAL WATCH.AI · RISK INTELLIGENCE</div>
     <h1>Operational priority</h1>
     <p className="intelligence-intro">Risk is a rule-based investigation priority derived from observed thermal behavior. It is separate from the anomaly model and does not predict fire cause.</p>
     {loading && <p className="intelligence-loading">Loading assessed event clusters…</p>}

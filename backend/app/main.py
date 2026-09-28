@@ -24,6 +24,7 @@ from app.routers import (
 from app.utils.logging import setup_logging
 from app.api.classification import router as weak_classification_router
 from app.api.firms_status import router as firms_status_router
+from app.api.reports import router as reports_router
 
 # --- Logging setup ---
 setup_logging()
@@ -47,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="IGNIS / ThermalWatch AI API",
+    title="Thermal Watch.AI API",
     description=(
         "Explainable thermal event intelligence from NASA FIRMS observations. "
         "Anomaly detection, weakly supervised recurrence classification, and "
@@ -92,13 +93,14 @@ else:
     app.include_router(map_router)
     app.include_router(history_router)
 app.include_router(weak_classification_router)
+app.include_router(reports_router)
 
 
 # --- Root endpoint ---
 @app.get("/")
 async def root() -> dict:
     return {
-        "service": "ThermalWatch AI",
+        "service": "THERMAL WATCH.AI",
         "version": "0.1.0",
         "description": "Geospatial intelligence for satellite thermal events",
         "docs": "/docs",

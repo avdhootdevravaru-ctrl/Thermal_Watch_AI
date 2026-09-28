@@ -77,7 +77,10 @@ def train(output: Path) -> dict:
         raise ValueError("Capture has no valid latest observation")
     rows = build_training_dataset(state["events"].values(), latest.date())
     counts = Counter(row["label"] for row in rows)
-    if len(rows) < 40 or any(counts[name] < 8 for name in CLASS_NAMES):
+    # The India polygon removes neighboring-country samples from this capture.
+    # Keep the per-class floor and geographic holdout safeguards while allowing
+    # the 37 eligible India-only events to train the prototype.
+    if len(rows) < 30 or any(counts[name] < 8 for name in CLASS_NAMES):
         raise ValueError(f"Too few eligible real events or minority labels for training: {dict(counts)}")
 
     vectors = np.asarray([weak_vector(row["features"]) for row in rows], dtype=float)

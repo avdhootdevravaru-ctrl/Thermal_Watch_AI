@@ -111,6 +111,14 @@ def test_thermal_event_evidence(active_event_id):
     assert "evidence" in response.json()
 
 
+def test_thermal_event_pdf_report(active_event_id):
+    response = client.get(f"/thermal-events/{active_event_id}/report.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF-")
+    assert len(response.content) > 20_000
+
+
 def test_thermal_event_weak_classification(active_event_id):
     # This might be just an endpoint to check if it exists, if not we ignore it
     # Some apps put this directly on the model endpoint

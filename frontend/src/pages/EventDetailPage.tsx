@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, MapPin, Activity, Calendar, AlertTriangle, Layers, TrendingUp, TrendingDown, Minus, Zap, Target, Database, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, MapPin, Activity, Calendar, AlertTriangle, Layers, TrendingUp, TrendingDown, Minus, Zap, Target, Database, ShieldAlert, Download } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts'
 import { api } from '@/api/client'
 import MapView from '@/components/MapView'
@@ -20,6 +20,8 @@ export default function EventDetailPage() {
   const [anchoring, setAnchoring] = useState(false)
   const [anchoringBlockchain, setAnchoringBlockchain] = useState(false)
   const [anchorError, setAnchorError] = useState<string | null>(null)
+  const [reporting, setReporting] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
   const [nearby, setNearby] = useState<{ facilities: Array<{ name?: string; type?: string; distance_km?: number }>; note?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -135,6 +137,26 @@ export default function EventDetailPage() {
     }
   }
 
+  const downloadReport = async () => {
+    setReporting(true)
+    setReportError(null)
+    try {
+      const blob = await api.downloadEventReport(eventId)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `thermal-watch-event-${eventId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setReportError('The event report could not be generated. Please retry after checking backend health.')
+    } finally {
+      setReporting(false)
+    }
+  }
+
   return (
     <div className="event-detail">
       <div className="event-detail-header">
@@ -147,6 +169,9 @@ export default function EventDetailPage() {
           <span className="event-id mono">#{event.id}</span>
         </div>
         <div className="detail-heading-meta">{locationLabel(event)} · {detectionTime(event.end_time ?? event.start_time)}</div>
+        <button className="primary-action report-action" type="button" onClick={() => void downloadReport()} disabled={reporting}>
+          <Download size={14} /> {reporting ? 'Generating report…' : 'Download Full Report'}
+        </button>
         <div className={`status-pill-large status-${event.status.toLowerCase()}`}>
           {event.status}
         </div>
@@ -159,6 +184,7 @@ export default function EventDetailPage() {
         </div>
       )}
       {!event.observations.some((observation) => observation.source === 'DEMO_SYNTHETIC') && <div className="banner banner-partial"><strong>NASA FIRMS capture</strong> · Source: {event.observations[0]?.source ?? 'Unknown'}. This event is built from satellite thermal detections; fire cause and historical baseline are unverified.</div>}
+      {reportError && <div className="banner banner-error" role="alert">{reportError}</div>}
 
       <div className="event-detail-body">
         <section className="detail-panel detail-panel-wide investigation-summary">

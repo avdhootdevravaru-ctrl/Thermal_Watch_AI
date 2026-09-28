@@ -22,6 +22,7 @@ from app.db.models import ThermalEvent, ThermalObservation, ThermalProfile, Pred
 from app.processing.persistence import compute_persistence_score
 from app.processing.risk import classify_event, compute_risk_score, identify_non_indian_events, delete_non_indian_events
 from app.ml.classifier import classify_with_fallback
+from app.geo.india import india_sql_contains
 from app.schemas.event import (
     ThermalEventDetail,
     ThermalEventList,
@@ -71,10 +72,7 @@ async def list_thermal_events(
 
     # Always filter to India geographic bounds (safety net for legacy data)
     query = query.filter(
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     )
 
     total = query.count()
@@ -131,11 +129,7 @@ async def get_thermal_event(
     """Get a single thermal event with full detail including observations and analysis."""
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        # India geographic bounds — reject events outside India
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -233,10 +227,7 @@ async def get_event_history(
     """
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -273,10 +264,7 @@ async def get_thermal_dna(
     """Get the Thermal DNA profile for an event."""
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -310,10 +298,7 @@ async def get_event_evidence(
     """Get the explainable evidence chain for an event."""
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -380,10 +365,7 @@ async def get_event_risk(
     """
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        ThermalEvent.latitude >= 6.5,
-        ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0,
-        ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -430,8 +412,7 @@ async def get_event_classification(event_id: int, db: Session = Depends(get_db))
     """Classify an event with a trained local model or the documented rule fallback."""
     event = db.query(ThermalEvent).filter(
         ThermalEvent.id == event_id,
-        ThermalEvent.latitude >= 6.5, ThermalEvent.latitude <= 35.5,
-        ThermalEvent.longitude >= 68.0, ThermalEvent.longitude <= 97.5,
+        india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude),
     ).first()
     if event is None:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")

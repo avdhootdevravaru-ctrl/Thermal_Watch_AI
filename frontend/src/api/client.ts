@@ -127,6 +127,14 @@ export const api = {
     return data
   },
 
+  downloadEventReport: async (eventId: number): Promise<Blob> => {
+    const { data } = await client.get(`/thermal-events/${eventId}/report.pdf`, {
+      responseType: 'blob',
+      timeout: 60000,
+    })
+    return data as Blob
+  },
+
   getEventHistory: async (eventId: number): Promise<EventHistoryPoint[]> => {
     const { data } = await client.get<EventHistoryPoint[]>(`/thermal-events/${eventId}/history`)
     return data

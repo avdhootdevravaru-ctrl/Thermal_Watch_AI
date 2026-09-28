@@ -395,6 +395,8 @@ def demo_quality(start_date: datetime | None = None, end_date: datetime | None =
             "observations_by_source": dict(Counter(o.source for o in observations)),
             "observations_by_region": {}, "duplicate_count": report.get("duplicates_removed", 0),
             "invalid_coordinates": report.get("invalid_coordinates", 0),
+            "outside_india": report.get("outside_india", 0),
+            "geographic_filter": "INDIA_NATURAL_EARTH_POLYGON",
             "confidence_distribution": dict(Counter("high" if o.confidence >= 80 else "medium" if o.confidence >= 50 else "low" for o in observations if o.confidence is not None)),
             "events_by_date": dict(Counter(e["start_time"].date().isoformat() for e in _events().values())),
             "orphan_events": 0, "observation_count_mismatches": 0,

@@ -616,10 +616,10 @@ class TestDataQuality:
         ts3 = datetime(2026, 9, 4, 14, 30, 0, tzinfo=timezone.utc)  # duplicate of ts1
 
         raw_obs = [
-            {"timestamp": ts1.isoformat(), "latitude": -15.3, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
-            {"timestamp": ts2.isoformat(), "latitude": -15.3, "longitude": 145.7, "intensity": 321.0, "confidence": 85.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
-            {"timestamp": ts3.isoformat(), "latitude": -15.3, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # dup
-            {"timestamp": None, "latitude": -15.3, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # missing ts
+            {"timestamp": ts1.isoformat(), "latitude": 12.9716, "longitude": 77.5946, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
+            {"timestamp": ts2.isoformat(), "latitude": 12.9716, "longitude": 77.5946, "intensity": 321.0, "confidence": 85.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
+            {"timestamp": ts3.isoformat(), "latitude": 12.9716, "longitude": 77.5946, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # dup
+            {"timestamp": None, "latitude": 12.9716, "longitude": 77.5946, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # missing ts
             {"timestamp": ts1.isoformat(), "latitude": None, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # missing lat
             {"timestamp": ts1.isoformat(), "latitude": -15.3, "longitude": None, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},  # missing lon
         ]
@@ -665,7 +665,7 @@ class TestDataQuality:
 
         raw_obs = [
             # valid
-            {"timestamp": ts1.isoformat(), "latitude": -15.3, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
+            {"timestamp": ts1.isoformat(), "latitude": 12.9716, "longitude": 77.5946, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
             # latitude out of range
             {"timestamp": ts1.isoformat(), "latitude": 95.0, "longitude": 145.7, "intensity": 320.5, "confidence": 80.0, "source": "VIIRS_NOAA20_NRT", "sensor": "VIIRS", "metadata": {}},
             # longitude out of range
@@ -790,15 +790,15 @@ class TestObservationEventLinking:
         # Verify that _invalid_coordinates flag is False for valid coords
         from app.ingestion.normalizer import normalize_observation
         obs1_norm = normalize_observation({
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "timestamp": datetime.now(timezone.utc),
             "source": "VIIRS_NOAA20_NRT",
             "sensor": "VIIRS",
         })
         assert obs1_norm["_invalid_coordinates"] is False
-        assert obs1_norm["latitude"] == 8.0
-        assert obs1_norm["longitude"] == 80.0
+        assert obs1_norm["latitude"] == 12.9716
+        assert obs1_norm["longitude"] == 77.5946
 
         # Verify source field works after fix
         assert obs1_norm["source"] == "VIIRS_NOAA20_NRT"
@@ -809,8 +809,8 @@ class TestObservationEventLinking:
 
         # Observation missing timestamp should have timestamp=None
         raw = {
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             # no timestamp key
         }
         obs = normalize_observation(raw)
@@ -819,8 +819,8 @@ class TestObservationEventLinking:
 
         # Observation with valid timestamp should have non-None timestamp
         raw2 = {
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "timestamp": "2026-09-06T14:30:00+00:00",
         }
         obs2 = normalize_observation(raw2)
@@ -841,8 +841,8 @@ class TestNoOrphanEvents:
 
         # Test that observations with valid lat/lon/timestamp pass the filter
         raw_with_ts = {
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "timestamp": "2026-09-06T14:30:00+00:00",
             "source": "VIIRS_NOAA20_NRT",
             "sensor": "VIIRS",
@@ -855,8 +855,8 @@ class TestNoOrphanEvents:
 
         # Test that observations missing timestamp are rejected
         raw_without_ts = {
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             # no timestamp
         }
         obs_missing = normalize_observation(raw_without_ts)
@@ -865,7 +865,7 @@ class TestNoOrphanEvents:
         # Test coordinate validation still works
         raw_invalid_lat = {
             "latitude": 95.0,  # invalid
-            "longitude": 80.0,
+            "longitude": 77.5946,
             "timestamp": "2026-09-06T14:30:00+00:00",
         }
         obs_invalid_lat = normalize_observation(raw_invalid_lat)
@@ -874,7 +874,7 @@ class TestNoOrphanEvents:
 
         # Test invalid longitude still works
         raw_invalid_lon = {
-            "latitude": 8.0,
+            "latitude": 12.9716,
             "longitude": -200.0,  # invalid
             "timestamp": "2026-09-06T14:30:00+00:00",
         }
@@ -896,15 +896,15 @@ class TestDuplicateDetectionPreserved:
         from app.api.ingestion import normalize_observation
 
         obs1 = normalize_observation({
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "timestamp": "2026-09-06T14:30:00+00:00",
             "source": "VIIRS_NOAA20_NRT",
             "sensor": "VIIRS",
         })
         obs2 = normalize_observation({
-            "latitude": 8.0,
-            "longitude": 80.0,
+            "latitude": 12.9716,
+            "longitude": 77.5946,
             "timestamp": "2026-09-06T14:30:00+00:00",
             "source": "VIIRS_NOAA20_NRT",
             "sensor": "VIIRS",
@@ -924,20 +924,41 @@ class TestIndiaFilteringPreserved:
         from app.processing.risk import is_in_india
 
         # South India test point
-        assert is_in_india(8.0, 80.0) == True
+        assert is_in_india(12.9716, 77.5946) is True
         # North India test point
-        assert is_in_india(30.0, 75.0) == True
+        assert is_in_india(28.6139, 77.2090) is True
         # Outside India
-        assert is_in_india(1.0, 80.0) == False  # Sri Lanka area but lat too low
-        assert is_in_india(0.0, 80.0) == False  # Equator
+        assert is_in_india(7.8731, 80.7718) is False  # Sri Lanka
+        assert is_in_india(33.6844, 73.0479) is False  # Pakistan
 
     def test_outside_india_observations_rejected(self):
         """Observations outside India bounds should be rejected."""
         from app.processing.risk import is_in_india
 
         # Outside India bounds
-        assert is_in_india(60.0, 80.0) == False  # Too far north
-        assert is_in_india(8.0, 120.0) == False  # Too far east (outside India)
+        assert is_in_india(34.5553, 69.2075) is False  # Afghanistan
+        assert is_in_india(31.2304, 121.4737) is False  # China
+
+    def test_csv_validation_rejects_neighbouring_country_points(self):
+        """The data pipeline rejects valid coordinates outside India's polygon."""
+        from app.ingestion.validation import validate_firms_csv
+
+        csv_text = (
+            "latitude,longitude,bright_ti4,acq_date,acq_time,confidence,frp\n"
+            "12.9716,77.5946,320.5,2026-09-06,1430,h,12.5\n"
+            "6.9271,79.8612,319.0,2026-09-06,1431,h,10.0\n"
+            "31.5204,74.3587,318.0,2026-09-06,1432,h,9.0\n"
+        )
+
+        observations, report = validate_firms_csv(csv_text, source="VIIRS_NOAA20_NRT")
+
+        assert len(observations) == 1
+        assert observations[0]["latitude"] == pytest.approx(12.9716)
+        assert report.records_received == 3
+        assert report.records_accepted == 1
+        assert report.records_rejected == 2
+        assert report.outside_india == 2
+        assert report.rejection_reasons == {"OUTSIDE_INDIA": 2}
 
 
 class TestFirmsClientSource:
@@ -956,7 +977,7 @@ class TestFirmsClientSource:
         mock_csv = (
             "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,"
             "satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
-            "8.0,80.0,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
+            "12.9716,77.5946,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
         )
         mock_fetch.return_value = mock_csv
 
@@ -974,7 +995,7 @@ class TestFirmsClientSource:
         mock_csv = (
             "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,"
             "satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
-            "8.0,80.0,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
+            "12.9716,77.5946,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
         )
         mock_fetch.return_value = mock_csv
 
@@ -989,7 +1010,7 @@ class TestFirmsClientSource:
         mock_csv = (
             "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,"
             "satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
-            "8.0,80.0,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
+            "12.9716,77.5946,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
         )
         mock_fetch.return_value = mock_csv
 
@@ -1003,7 +1024,7 @@ class TestFirmsClientSource:
         mock_csv = (
             "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,"
             "satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
-            "8.0,80.0,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
+            "12.9716,77.5946,320.5,1,1,2026-09-06,1430,N20,VIIRS,h,1.0,,N\n"
         )
         mock_fetch.return_value = mock_csv
 
@@ -1012,8 +1033,8 @@ class TestFirmsClientSource:
         with patch.object(client, "_parse_csv") as mock_parse_csv:
             mock_parse_csv.return_value = [{
                 "timestamp": datetime.now(timezone.utc),
-                "latitude": 8.0,
-                "longitude": 80.0,
+                "latitude": 12.9716,
+                "longitude": 77.5946,
                 "intensity": 320.5,
                 "confidence": 50.0,
                 "source": "VIIRS_NOAA20_NRT",

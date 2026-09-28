@@ -16,32 +16,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import numpy as np
 
 from app.db.models import RiskAssessment, ThermalEvent, ThermalObservation
+from app.geo.india import india_sql_contains, is_in_india
 
 logger = logging.getLogger(__name__)
 
-# India bounding box (approximate)
-INDIA_BOUNDS = {
-    "min_lat": 6.5,
-    "max_lat": 35.5,
-    "min_lon": 68.0,
-    "max_lon": 97.5,
-}
-
-
-def is_in_india(lat: float, lon: float) -> bool:
-    """Check if a point is within India boundaries.
-
-    Uses simple bounding box check. For more accuracy, use PostGIS with actual
-    India polygon geometry.
-    """
-    return (
-        INDIA_BOUNDS["min_lat"] <= lat <= INDIA_BOUNDS["max_lat"]
-        and INDIA_BOUNDS["min_lon"] <= lon <= INDIA_BOUNDS["max_lon"]
-    )
-
-
 def filter_india_observations(observations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Filter observations to only those within India boundaries."""
+    """Filter observations with the bundled India boundary polygon."""
     return [
         obs for obs in observations
         if obs.get("latitude") is not None
@@ -403,12 +383,8 @@ def identify_non_indian_events(db: Any) -> List[Dict[str, Any]]:
     """
     from app.db.models import ThermalEvent, ThermalObservation
 
-    # Find events outside India bounding box
     non_indian = db.query(ThermalEvent).filter(
-        (ThermalEvent.latitude < 6.5) |
-        (ThermalEvent.latitude > 35.5) |
-        (ThermalEvent.longitude < 68.0) |
-        (ThermalEvent.longitude > 97.5)
+        ~india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude)
     ).all()
 
     result = []
@@ -438,10 +414,7 @@ def delete_non_indian_events(db: Any) -> Dict[str, int]:
     from app.db.models import ThermalEvent
 
     deleted = db.query(ThermalEvent).filter(
-        (ThermalEvent.latitude < 6.5) |
-        (ThermalEvent.latitude > 35.5) |
-        (ThermalEvent.longitude < 68.0) |
-        (ThermalEvent.longitude > 97.5)
+        ~india_sql_contains(ThermalEvent.latitude, ThermalEvent.longitude)
     ).delete(synchronize_session=False)
     db.commit()
 
