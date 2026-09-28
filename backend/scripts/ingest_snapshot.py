@@ -3,12 +3,12 @@ import sys
 import json
 from pathlib import Path
 from collections import Counter
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.db.base import _get_engine
-from app.db.models import ThermalObservation, ThermalEvent, ThermalProfile, RiskAssessment
+from app.db.models import ThermalObservation, ThermalEvent, ThermalProfile, RiskAssessment, Prediction
 from app.snapshot import snapshot_state
 from app.processing.persistence import compute_persistence_score
 from app.processing.risk import classify_event, compute_risk_score
@@ -21,6 +21,8 @@ def observation_key(row):
 def persist_snapshot():
     state = snapshot_state()
     added_events = added_observations = 0
+    merged_events = 0
+    claimed_event_ids = set()
     with Session(_get_engine()) as session, session.begin():
         session.execute(text("SELECT pg_advisory_xact_lock(26162)"))
         existing = {observation_key(row): row for row in session.scalars(select(ThermalObservation))}
@@ -28,15 +30,36 @@ def persist_snapshot():
             members = event["observations"]
             matches = [existing[observation_key(row)] for row in members if observation_key(row) in existing]
             ids = Counter(row.event_id for row in matches if row.event_id is not None)
-            if len(ids) > 1:
-                raise ValueError("Capture joins multiple persisted events; explicit reconciliation is required")
-            db_event = session.get(ThermalEvent, next(iter(ids))) if ids else None
+            available = [(event_id, count) for event_id, count in ids.items()
+                         if event_id not in claimed_event_ids]
+            primary_id = max(available, key=lambda item: (item[1], -item[0]))[0] if available else None
+            db_event = session.get(ThermalEvent, primary_id) if primary_id is not None else None
             if db_event is None:
                 db_event = ThermalEvent(**{key: event[key] for key in (
                     "latitude", "longitude", "start_time", "end_time", "observation_count", "persistence_score", "status")})
                 session.add(db_event)
                 session.flush()
                 added_events += 1
+            claimed_event_ids.add(db_event.id)
+            # A rolling capture can bridge clusters that were separate in an
+            # earlier run. Preserve every observation and consolidate those
+            # derived event rows transactionally into the dominant event.
+            for event_id in ids:
+                if event_id == db_event.id or event_id in claimed_event_ids:
+                    continue
+                for old_observation in session.scalars(select(ThermalObservation).where(
+                        ThermalObservation.event_id == event_id)):
+                    old_observation.event_id = db_event.id
+                old_event = session.get(ThermalEvent, event_id)
+                if old_event is not None:
+                    # Explicit child deletes avoid SQLAlchemy trying to NULL a
+                    # one-to-one primary key before the database cascade runs.
+                    session.execute(delete(ThermalProfile).where(ThermalProfile.event_id == event_id))
+                    session.execute(delete(RiskAssessment).where(RiskAssessment.event_id == event_id))
+                    session.execute(delete(Prediction).where(Prediction.event_id == event_id))
+                    session.delete(old_event)
+                    merged_events += 1
+                claimed_event_ids.add(event_id)
             for row in members:
                 key = observation_key(row)
                 if key in existing:
@@ -75,7 +98,8 @@ def persist_snapshot():
         session.flush()
         counts = {"observations": session.execute(text("SELECT count(*) FROM thermal_observations")).scalar_one(),
                   "events": session.execute(text("SELECT count(*) FROM thermal_events")).scalar_one()}
-    return {"added_observations": added_observations, "added_events": added_events, "persisted": counts}
+    return {"added_observations": added_observations, "added_events": added_events,
+            "merged_events": merged_events, "persisted": counts}
 
 
 if __name__ == "__main__":

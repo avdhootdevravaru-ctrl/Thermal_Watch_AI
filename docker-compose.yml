@@ -1,21 +1,54 @@
-version: '3.8'
-
 services:
-  thermalwatch-db:
+  database:
     image: postgis/postgis:15-3.3
-    ports:
-      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+    ports: ["127.0.0.1:5432:5432"]
     environment:
-      POSTGRES_USER: thermalwatch
-      POSTGRES_PASSWORD: thermalwatch
-      POSTGRES_DB: thermalwatch
-    volumes:
-      - thermalwatch-data:/var/lib/postgresql/data
+      POSTGRES_USER: ${POSTGRES_USER:-thermalwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-thermalwatch}
+    volumes: ["thermalwatch-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U thermalwatch -d thermalwatch"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-thermalwatch}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB:-thermalwatch}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      DEMO_MODE: "false"
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:?Set FIRMS_MAP_KEY in the root .env file}
+      FIRMS_SATELLITE: ${FIRMS_SATELLITE:-VIIRS_NOAA20_NRT}
+      FIRMS_AREA: ${FIRMS_AREA:-68,6.5,97.5,35.5}
+      FIRMS_DAYS: ${FIRMS_DAYS:-5}
+      FIRMS_SNAPSHOT_PATH: data/firms_latest_raw.csv
+      ML_MODEL_PATH: models/firms_anomaly.joblib
+      ML_CLASSIFIER_PATH: models/firms_recurrence.joblib
+      BLOCKCHAIN_ENABLED: ${BLOCKCHAIN_ENABLED:-false}
+      BLOCKCHAIN_NETWORK: ${BLOCKCHAIN_NETWORK:-sepolia}
+      BLOCKCHAIN_CHAIN_ID: ${BLOCKCHAIN_CHAIN_ID:-11155111}
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-https://ethereum-sepolia.publicnode.com}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-}
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["thermalwatch-captures:/app/data"]
+    depends_on:
+      database: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 10s
       timeout: 5s
-      retries: 5
-
+      retries: 12
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports: ["127.0.0.1:3000:80"]
+    depends_on:
+      backend: {condition: service_healthy}
 volumes:
   thermalwatch-data:
+  thermalwatch-captures:

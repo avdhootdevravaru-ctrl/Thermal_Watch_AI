@@ -48,7 +48,7 @@ export default function DashboardPage() {
       return { ...first, items: [...first.items, ...remaining.flatMap((page) => page.items)] }
     }
     const results = await Promise.allSettled([
-      api.getHealth(), api.getMapHotspots({ limit: 500 }),
+      api.getHealth(), api.getMapHotspots({ limit: 1000 }),
       loadAllEvents(),
       api.getHistoricalStatistics(), api.getDataQuality(),
       api.getFirmsStatus(), api.getModelStatus(), api.getDatabaseHealth(), api.getBlockchainStatus(),
@@ -63,7 +63,8 @@ export default function DashboardPage() {
     if (eventResult.status === 'fulfilled') {
       setEvents(eventResult.value.items)
       setTotalEvents(eventResult.value.total)
-      const missing = eventResult.value.items.filter((event) => !event.classification_type).slice(0, 20)      const classified = await Promise.allSettled(missing.map(
+      const missing = eventResult.value.items.filter((event) => !event.classification_type).slice(0, 20)
+      const classified = await Promise.allSettled(missing.map(
         (event) => api.getEventClassification(event.id),
       ))
       const next: Record<number, EventClassification> = {}

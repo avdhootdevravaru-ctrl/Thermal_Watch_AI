@@ -1,0 +1,11 @@
+.git
+**/.env
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+backend/data
+backend/pgsql
+backend/pgsql_downloads
+docs/screenshots
+frontend.zip

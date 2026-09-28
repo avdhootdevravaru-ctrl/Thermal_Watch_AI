@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
+from threading import RLock
 from types import SimpleNamespace
 
 from app.config import settings
@@ -23,8 +24,11 @@ from app.processing.persistence import compute_persistence_score
 from app.processing.risk import classify_event, compute_risk_score
 
 
+_snapshot_lock = RLock()
+
+
 @lru_cache(maxsize=1)
-def snapshot_state() -> dict:
+def _snapshot_state_cached() -> dict:
     path = Path(settings.FIRMS_SNAPSHOT_PATH)
     if not path.is_file():
         raise FileNotFoundError(f"FIRMS snapshot missing: {path}")
@@ -91,5 +95,12 @@ def snapshot_state() -> dict:
             "database_persisted": False}
 
 
+def snapshot_state() -> dict:
+    """Return one shared capture build even during concurrent startup requests."""
+    with _snapshot_lock:
+        return _snapshot_state_cached()
+
+
 def clear_snapshot_cache() -> None:
-    snapshot_state.cache_clear()
+    with _snapshot_lock:
+        _snapshot_state_cached.cache_clear()

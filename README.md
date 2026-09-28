@@ -26,7 +26,7 @@ flowchart TD
 - Python 3.11+ / FastAPI
 - React / Node.js 18+ / TypeScript / Vite / Leaflet
 - PostgreSQL 15 + PostGIS 3.3 (optional but recommended)
-- scikit-learn (Isolation Forest, Random Forest)
+- scikit-learn (Isolation Forest and evaluated recurrence classifiers)
 
 ## Quick Start
 
@@ -68,10 +68,12 @@ npm run dev
 ```
 
 ### Running with PostgreSQL + PostGIS
-1. Make sure `FIRMS_SNAPSHOT_PATH` is empty in `.env`.
+1. Keep `FIRMS_SNAPSHOT_PATH=data/firms_latest_raw.csv` to serve the latest
+   validated capture while exposing database persistence health independently.
 2. Start the database (see [PostgreSQL + PostGIS Setup](#postgresql--postgis-setup)).
-3. Initialize the DB: `.\.venv\Scripts\python.exe -m app.db.init_db`
-4. Run the API and frontend as usual.
+3. Initialize/migrate the DB: `.\.venv\Scripts\python.exe scripts/setup_database.py`
+4. Persist the current validated capture: `.\.venv\Scripts\python.exe scripts/ingest_snapshot.py`
+5. Run the API and frontend as usual.
 
 ## Environment Variables
 
@@ -106,11 +108,20 @@ npm run dev
 
 ## PostgreSQL + PostGIS Setup
 
-### Option 1: Docker
-A `docker-compose.yml` is provided at the root:
-```bash
-docker-compose up -d
+### Option 1: Complete Docker stack
+Docker Desktop with Compose v2 can run PostGIS, FastAPI, and the production
+frontend together. The services bind to localhost for a safe local demo.
+```powershell
+Copy-Item .env.docker.example .env
+# Replace POSTGRES_PASSWORD and FIRMS_MAP_KEY in root .env.
+docker compose up --build -d
+docker compose ps
 ```
+
+Open `http://localhost:3000`; API docs remain available at
+`http://localhost:8000/docs`. The backend captures FIRMS data on first startup,
+runs migrations, synchronizes PostGIS, and trains the local anomaly artifact.
+Later refreshes use `POST http://localhost:8000/ingestion/firms/run`.
 
 ### Option 2: Native Install
 Install PostgreSQL 15 and PostGIS 3.3 natively. Create the database and run `CREATE EXTENSION postgis;`.
@@ -128,7 +139,7 @@ If using the database, data can be ingested from a snapshot or fetched directly 
 ## Machine Learning
 
 - **Anomaly Detection (Isolation Forest):** Unsupervised model. Ranks unusual event patterns in the capture.
-- **Recurrence Classifier (Random Forest):** Weakly supervised later-day re-detection classifier, trained on real FIRMS event clusters.
+- **Recurrence Classifier (currently Logistic Regression):** selected from Logistic Regression, Random Forest, and HistGradientBoosting using training-only geographic group cross-validation. The untouched holdout measures later-day re-detection labels from the same capture.
 
 ### Training Pipeline
 ```powershell
@@ -138,7 +149,9 @@ cd backend
 ```
 
 ### Honest Evaluation Metrics Note
-The current holdout has 19 events and ~52.6% accuracy. This is a research prototype, not an operational alert model.
+Metrics are stored with the trained artifact and displayed by `/health/model`;
+run training after each new capture rather than copying old numbers into docs.
+The fixed seed geographic holdout is a research check, not external validation.
 - **What they claim:** Ranks unusual events and identifies recurrent spatial-temporal signatures based on historical snapshots.
 - **What they do NOT claim:** They do NOT classify fire cause, nor estimate true fire probability. Uncalibrated output.
 
@@ -189,8 +202,8 @@ Be honest about:
 - **Satellite detection ≠ fire cause:** Thermal detections are not ground-truth labels.
 - **ML limitations:** The models are uncalibrated and accuracy is weak.
 - **No blockchain mainnet:** Evidence hashes are stored locally only.
-- **Weak classifier performance:** Currently performing just above random chance.
-- **PostGIS optional:** Snapshots are used primarily instead of live database persistence in the prototype.
+- **Weak classifier performance:** Limited by weak labels and a single capture; inspect current artifact metrics in the Model page.
+- **Serving mode:** The dashboard can serve a validated snapshot while PostgreSQL/PostGIS independently persists records. Both states are reported.
 
 ## Glossary
 

@@ -485,17 +485,26 @@ def demo_ingestion(request: IngestionRunRequest | None = None):
     clear_snapshot_cache()
     _events.cache_clear()
     events = snapshot_state()["events"]
+    database_report = None
+    try:
+        from scripts.ingest_snapshot import persist_snapshot
+        database_report = persist_snapshot()
+    except Exception as exc:
+        logger.warning("FIRMS capture saved but database synchronization failed (%s)", type(exc).__name__)
     return IngestionResult(
         status="success", observations_fetched=report.records_received,
         observations_stored=report.records_accepted,
         observations_failed=report.records_rejected,
-        events_created=len(events), events_updated=0,
+        events_created=database_report["added_events"] if database_report else len(events),
+        events_updated=(len(events) - database_report["added_events"]
+                        if database_report else 0),
         persistent_sources=sum(event["status"] == "PERSISTENT" for event in events.values()),
         observations_invalid_coordinates=report.invalid_coordinates,
         observations_missing_critical_fields=report.rejection_reasons.get("MISSING_COORDINATES", 0),
         observations_duplicate=report.duplicates_removed,
         started_at=started, completed_at=captured,
-        storage_backend="LOCAL_FIRMS_FILES", records_accepted=report.records_accepted,
+        storage_backend=("LOCAL_FIRMS_FILES_AND_POSTGIS" if database_report
+                         else "LOCAL_FIRMS_FILES"), records_accepted=report.records_accepted,
         records_rejected=report.records_rejected,
     )
 
