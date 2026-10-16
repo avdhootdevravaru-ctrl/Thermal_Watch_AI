@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: thermal-watch-ai-sih26162-api
+    runtime: python
+    plan: free
+    region: singapore
+    branch: tej-dashboard
+    rootDir: backend
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: python scripts/setup_database.py && python scripts/ingest_snapshot.py && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CORS_ORIGINS
+        value: https://thermal-watch-ai-sih26162.onrender.com
+      - key: DEMO_MODE
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: FIRMS_MAP_KEY
+        sync: false
+      - key: FIRMS_SATELLITE
+        value: VIIRS_NOAA20_NRT
+      - key: FIRMS_AREA
+        value: 68,6.5,97.5,35.5
+      - key: FIRMS_DAYS
+        value: "5"
+      - key: FIRMS_SNAPSHOT_PATH
+        value: data/firms_latest_raw.csv
+      - key: ML_MODEL_PATH
+        value: models/firms_anomaly.joblib
+      - key: ML_CLASSIFIER_PATH
+        value: models/firms_recurrence.joblib
+      - key: BLOCKCHAIN_ENABLED
+        value: "false"
+      - key: BLOCKCHAIN_NETWORK
+        value: sepolia
+      - key: BLOCKCHAIN_CHAIN_ID
+        value: "11155111"
+      - key: BLOCKCHAIN_RPC_URL
+        value: https://ethereum-sepolia.publicnode.com
+
+  - type: web
+    name: thermal-watch-ai-sih26162
+    runtime: static
+    branch: tej-dashboard
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: VITE_API_BASE_URL
+        value: https://thermal-watch-ai-sih26162-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
