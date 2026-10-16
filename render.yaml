@@ -22,7 +22,9 @@ services:
       - key: DEMO_MODE
         value: "false"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: thermal-watch-ai-sih26162-db
+          property: connectionString
       - key: FIRMS_MAP_KEY
         sync: false
       - key: FIRMS_SATELLITE
@@ -63,3 +65,10 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+
+databases:
+  - name: thermal-watch-ai-sih26162-db
+    plan: free
+    region: singapore
+    databaseName: thermal_watch_ai
+    user: thermal_watch_ai

@@ -4,8 +4,8 @@ The production Blueprint in `render.yaml` deploys:
 
 - the Vite dashboard as a Render static site;
 - the FastAPI API as a Render web service in Singapore;
-- PostgreSQL/PostGIS on Neon through the secret `DATABASE_URL` supplied in
-  the Render dashboard.
+- PostgreSQL/PostGIS on Render, connected to the backend automatically through
+  the Blueprint-managed `DATABASE_URL`.
 
 The checked-in NASA FIRMS CSV is the same public capture used by the verified
 local dashboard. The backend start command applies the Alembic schema and
@@ -16,7 +16,6 @@ idempotently persists that capture into PostGIS before starting Uvicorn.
 Enter these only in the Render Blueprint form. Never add them to this file or
 to Git:
 
-- `DATABASE_URL`: the Neon pooled connection string, with `sslmode=require`;
 - `FIRMS_MAP_KEY`: the NASA FIRMS MAP_KEY used for fresh ingestion.
 
 On-chain anchoring stays disabled unless a contract and a dedicated testnet
@@ -37,8 +36,8 @@ Render dashboard, then redeploy both services.
 ## Free-tier behavior
 
 The static site is served from Render's CDN. A free Render web service sleeps
-after inactivity, so the first API request can take about one minute. Neon
-scales an idle database to zero and wakes it automatically. Render's free web
+after inactivity, so the first API request can take about one minute. Render's
+free PostgreSQL database expires after 30 days and has no backups. The free web
 service also has an ephemeral filesystem, so local evidence anchor files reset
 after a restart; generated evidence packages and verification are deterministic,
-and PostGIS data remains stored in Neon.
+and PostGIS data remains stored in PostgreSQL while the database is active.
